@@ -1,0 +1,17 @@
+dist: trusty
+sudo: false
+addons:
+  apt:
+    packages:
+      - bison
+      - git
+      - ruby-dev
+language: c
+compiler:
+  - gcc
+  - clang
+script:
+  - rake test
+os:
+  - linux
+  - osx
