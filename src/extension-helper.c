@@ -6,9 +6,11 @@ mrb_str_incr(mrb_state *mrb, mrb_value self)
 {
   mrb_int numeric;
   if (RSTRING_LEN(self) != sizeof(numeric)) mrb_raise(mrb, E_ARGUMENT_ERROR, "supplied string has wrong size");
+  mrb_str_modify(mrb, RSTRING(self));
 
   memcpy(&numeric, (const uint8_t *) RSTRING_PTR(self), sizeof(numeric));
-  memcpy((uint8_t *) RSTRING_PTR(self), &++numeric, sizeof(numeric));
+  ++numeric;
+  memcpy((uint8_t *) RSTRING_PTR(self), &numeric, sizeof(numeric));
 
   return self;
 }
