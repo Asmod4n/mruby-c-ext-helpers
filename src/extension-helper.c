@@ -94,11 +94,11 @@ mrb_mruby_c_ext_helpers_gem_init(mrb_state* mrb)
 {
   mrb_define_method(mrb, mrb->string_class, "incr", mrb_str_incr, MRB_ARGS_NONE());
   mrb_define_method(mrb, mrb->string_class, "to_fix", mrb_bin2fix, MRB_ARGS_NONE());
-  mrb_define_method(mrb, mrb->fixnum_class, "to_bin", mrb_fix2bin, MRB_ARGS_NONE());
+  mrb_define_method(mrb, mrb->integer_class, "to_bin", mrb_fix2bin, MRB_ARGS_NONE());
   mrb_define_method(mrb, mrb->string_class, "to_fix_le", mrb_bin2fix_le, MRB_ARGS_NONE());
-  mrb_define_method(mrb, mrb->fixnum_class, "to_bin_le", mrb_fix2bin_le, MRB_ARGS_NONE());
+  mrb_define_method(mrb, mrb->integer_class, "to_bin_le", mrb_fix2bin_le, MRB_ARGS_NONE());
   mrb_define_method(mrb, mrb->string_class, "to_fix_be", mrb_bin2fix_be, MRB_ARGS_NONE());
-  mrb_define_method(mrb, mrb->fixnum_class, "to_bin_be", mrb_fix2bin_be, MRB_ARGS_NONE());
+  mrb_define_method(mrb, mrb->integer_class, "to_bin_be", mrb_fix2bin_be, MRB_ARGS_NONE());
 #ifndef MRB_WITHOUT_FLOAT
   mrb_define_method(mrb, mrb->string_class, "to_flo", mrb_bin2flo, MRB_ARGS_NONE());
   mrb_define_method(mrb, mrb->float_class,  "to_bin", mrb_flo2bin, MRB_ARGS_NONE());

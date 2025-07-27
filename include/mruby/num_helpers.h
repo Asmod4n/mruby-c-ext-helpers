@@ -1,6 +1,4 @@
-#ifndef NUM_HELPERS_H
-#define NUM_HELPERS_H
-
+#pragma once
 #include "branch_pred.h"
 #include <mruby.h>
 #include <mruby/string.h>
@@ -10,6 +8,37 @@
 #include <mruby/dump.h>
 
 MRB_BEGIN_DECL
+
+MRB_API mrb_value mrb_convert_int8(mrb_state* mrb, int8_t value);
+MRB_API mrb_value mrb_convert_uint8(mrb_state* mrb, uint8_t value);
+
+#if MRB_INT_BIT >= 16
+MRB_API mrb_value mrb_convert_int16(mrb_state* mrb, int16_t value);
+#if defined(MRB_USE_BIGINT) || MRB_INT_BIT == 32
+MRB_API mrb_value mrb_convert_uint16(mrb_state* mrb, uint16_t value);
+#endif
+#endif
+
+#if MRB_INT_BIT >= 32
+MRB_API mrb_value mrb_convert_int32(mrb_state* mrb, int32_t value);
+#if defined(MRB_USE_BIGINT) || MRB_INT_BIT == 64
+MRB_API mrb_value mrb_convert_uint32(mrb_state* mrb, uint32_t value);
+#endif
+#endif
+
+#if MRB_INT_BIT >= 64
+MRB_API mrb_value mrb_convert_int64(mrb_state* mrb, int64_t value);
+#if defined(MRB_USE_BIGINT) || MRB_INT_BIT > 64
+MRB_API mrb_value mrb_convert_uint64(mrb_state* mrb, uint64_t value);
+#endif
+#endif
+
+#ifndef MRB_NO_FLOAT
+MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value);
+#ifndef MRB_USE_FLOAT32
+MRB_API mrb_value mrb_convert_double(mrb_state* mrb, double value);
+#endif
+#endif
 
 MRB_INLINE mrb_value
 MRB_ENCODE_FIX_NAT(mrb_state *mrb, mrb_int numeric)
@@ -36,16 +65,16 @@ MRB_ENCODE_FIX_LE(mrb_state *mrb, mrb_int numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     uint8_t *dst = (uint8_t *) RSTRING_PTR(bin);
     for (int i = 0; i < sizeof(numeric) - 1; i++) {
       dst[i] = (uint8_t) numeric;
       numeric >>= 8;
     }
     dst[sizeof(numeric) - 1] = (uint8_t) numeric;
-  } else {
+#else
     memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));
-  }
+#endif
 
   return bin;
 }
@@ -58,15 +87,15 @@ MRB_DECODE_FIX_LE(mrb_state *mrb, mrb_value bin)
   if (unlikely(!mrb_string_p(bin))) mrb_raise(mrb, E_TYPE_ERROR, "Not a String");
   if (RSTRING_LEN(bin) != sizeof(numeric)) mrb_raise(mrb, E_ARGUMENT_ERROR, "Encoded Data cannot be decoded");
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     const uint8_t *src = (const uint8_t *) RSTRING_PTR(bin);
     numeric = (mrb_int) src[0];
     for (int i = 1; i < sizeof(numeric); i++) {
       numeric |= (mrb_int) src[i] << (8 * i);
     }
-  } else {
+#else
     memcpy(&numeric, (const uint8_t *) RSTRING_PTR(bin), sizeof(numeric));
-  }
+#endif
 
   return mrb_fixnum_value(numeric);
 }
@@ -76,16 +105,16 @@ MRB_ENCODE_FIX_BE(mrb_state *mrb, mrb_int numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));
-  } else {
+#else
     uint8_t *dst = (uint8_t *) RSTRING_PTR(bin);
     for (int i = sizeof(numeric) -1;i > 0; i--) {
       dst[i] = (uint8_t) numeric;
       numeric >>= 8;
     }
     dst[0] = (uint8_t) numeric;
-  }
+#endif
 
   return bin;
 }
@@ -98,15 +127,15 @@ MRB_DECODE_FIX_BE(mrb_state *mrb, mrb_value bin)
   if (unlikely(!mrb_string_p(bin))) mrb_raise(mrb, E_TYPE_ERROR, "Not a String");
   if (RSTRING_LEN(bin) != sizeof(numeric)) mrb_raise(mrb, E_ARGUMENT_ERROR, "Encoded Data cannot be decoded");
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     memcpy(&numeric, (const uint8_t *) RSTRING_PTR(bin), sizeof(numeric));
-  } else {
+#else
     const uint8_t *src = (const uint8_t *) RSTRING_PTR(bin);
     numeric = (mrb_int) src[sizeof(numeric) - 1];
     for (int i = sizeof(numeric) - 2; i >= 0; i--) {
       numeric |= (mrb_int) src[i] << (sizeof(numeric) * (8 - i - 1));
     }
-  }
+#endif
 
   return mrb_fixnum_value(numeric);
 }
@@ -137,7 +166,7 @@ MRB_ENCODE_FLO_LE(mrb_state *mrb, mrb_float numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     if (unlikely(sizeof(mrb_float) != sizeof(mrb_int))) mrb_raise(mrb, E_RUNTIME_ERROR, "size of mrb_float and mrb_int differ, cannot encode floats.");
 
     union {
@@ -152,9 +181,9 @@ MRB_ENCODE_FLO_LE(mrb_state *mrb, mrb_float numeric)
       swap.i >>= 8;
     }
     dst[sizeof(swap) - 1] = (uint8_t) swap.i;
-  } else {
+#else
     memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));
-  }
+#endif
 
   return bin;
 }
@@ -165,7 +194,7 @@ MRB_DECODE_FLO_LE(mrb_state *mrb, mrb_value bin)
   if (unlikely(!mrb_string_p(bin))) mrb_raise(mrb, E_TYPE_ERROR, "Not a String");
   if (RSTRING_LEN(bin) != sizeof(mrb_float)) mrb_raise(mrb, E_ARGUMENT_ERROR, "Encoded Data cannot be decoded");
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     if (unlikely(sizeof(mrb_float) != sizeof(mrb_int))) mrb_raise(mrb, E_RUNTIME_ERROR, "size of mrb_float and mrb_int differ, cannot decode floats.");
 
     union {
@@ -180,11 +209,11 @@ MRB_DECODE_FLO_LE(mrb_state *mrb, mrb_value bin)
     }
 
     return mrb_float_value(mrb, swap.f);
-  } else {
+#else
     mrb_float numeric;
     memcpy(&numeric, (const uint8_t *) RSTRING_PTR(bin), sizeof(numeric));
     return mrb_float_value(mrb, numeric);
-  }
+#endif
 }
 
 MRB_INLINE mrb_value
@@ -192,9 +221,9 @@ MRB_ENCODE_FLO_BE(mrb_state *mrb, mrb_float numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));
-  } else {
+#else
     if (unlikely(sizeof(mrb_float) != sizeof(mrb_int))) mrb_raise(mrb, E_RUNTIME_ERROR, "size of mrb_float and mrb_int differ, cannot encode floats.");
 
     union {
@@ -209,7 +238,7 @@ MRB_ENCODE_FLO_BE(mrb_state *mrb, mrb_float numeric)
       swap.i >>= 8;
     }
     dst[0] = (uint8_t) swap.i;
-  }
+#endif
 
   return bin;
 }
@@ -220,11 +249,11 @@ MRB_DECODE_FLO_BE(mrb_state *mrb, mrb_value bin)
   if (unlikely(!mrb_string_p(bin))) mrb_raise(mrb, E_TYPE_ERROR, "Not a String");
   if (RSTRING_LEN(bin) != sizeof(mrb_float)) mrb_raise(mrb, E_ARGUMENT_ERROR, "Encoded Data cannot be decoded");
 
-  if (bigendian_p()) {
+#ifdef MRB_ENDIAN_BIG
     mrb_float numeric;
     memcpy(&numeric, (const uint8_t *) RSTRING_PTR(bin), sizeof(numeric));
     return mrb_float_value(mrb, numeric);
-  } else {
+#else
     if (unlikely(sizeof(mrb_float) != sizeof(mrb_int))) mrb_raise(mrb, E_RUNTIME_ERROR, "size of mrb_float and mrb_int differ, cannot decode floats.");
 
     union {
@@ -239,7 +268,7 @@ MRB_DECODE_FLO_BE(mrb_state *mrb, mrb_value bin)
     }
 
     return mrb_float_value(mrb, swap.f);
-  }
+#endif
 }
 
 #define MRB_POSNUMB2NUM(mrb, number) ((POSFIXABLE(number)) ? mrb_fixnum_value(number) : mrb_float_value(mrb, number))
@@ -259,5 +288,3 @@ MRB_DECODE_FLO_BE(mrb_state *mrb, mrb_value bin)
 #endif
 
 MRB_END_DECL
-
-#endif
