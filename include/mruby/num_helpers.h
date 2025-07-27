@@ -40,6 +40,15 @@ MRB_API mrb_value mrb_convert_double(mrb_state* mrb, double value);
 #endif
 #endif
 
+MRB_API mrb_value mrb_convert_short(mrb_state* mrb, short value);
+MRB_API mrb_value mrb_convert_int(mrb_state* mrb, int value);
+MRB_API mrb_value mrb_convert_long(mrb_state* mrb, long value);
+MRB_API mrb_value mrb_convert_long_long(mrb_state* mrb, long long value);
+MRB_API mrb_value mrb_convert_ushort(mrb_state* mrb, unsigned short value);
+MRB_API mrb_value mrb_convert_uint(mrb_state* mrb, unsigned int value);
+MRB_API mrb_value mrb_convert_ulong(mrb_state* mrb, unsigned long value);
+MRB_API mrb_value mrb_convert_ulong_long(mrb_state* mrb, unsigned long long value);
+
 MRB_INLINE mrb_value
 MRB_ENCODE_FIX_NAT(mrb_state *mrb, mrb_int numeric)
 {
