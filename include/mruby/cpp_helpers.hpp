@@ -21,18 +21,18 @@ MRB_API void mrb_cpp_delete(mrb_state* mrb, T* ptr) {
   mrb_free(mrb, ptr);
 }
 
-#define MRB_CPP_DEFINE_TYPE(ClassName)                           \
-  static void ClassName##_free(mrb_state* mrb, void* ptr) {      \
+#define MRB_CPP_DEFINE_TYPE(ClassName, Identifier)                           \
+  static void Identifier##_free(mrb_state* mrb, void* ptr) {      \
     mrb_cpp_delete<ClassName>(mrb, static_cast<ClassName*>(ptr));\
   }                                                              \
                                                                  \
-  static const struct mrb_data_type ClassName##_type = {         \
-    #ClassName, ClassName##_free                                 \
+  static const struct mrb_data_type Identifier##_type = {         \
+    #ClassName, Identifier##_free                                 \
   };                                                             \
                                                                  \
   template <>                                                    \
   struct mrb_data_type_traits<ClassName> {                       \
     static const mrb_data_type* get() {                          \
-      return &ClassName##_type;                                  \
+      return &Identifier##_type;                                  \
     }                                                            \
   };
