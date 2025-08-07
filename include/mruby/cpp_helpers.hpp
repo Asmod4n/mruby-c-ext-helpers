@@ -2,7 +2,6 @@
 #include <mruby.h>
 #include <mruby/data.h>
 #include <new>
-#include <iostream>
 
 template <typename T>
 struct mrb_data_type_traits;
@@ -21,18 +20,18 @@ MRB_API void mrb_cpp_delete(mrb_state* mrb, T* ptr) {
   mrb_free(mrb, ptr);
 }
 
-#define MRB_CPP_DEFINE_TYPE(ClassName, Identifier)                           \
+#define MRB_CPP_DEFINE_TYPE(ClassName, Identifier)                \
   static void Identifier##_free(mrb_state* mrb, void* ptr) {      \
-    mrb_cpp_delete<ClassName>(mrb, static_cast<ClassName*>(ptr));\
-  }                                                              \
-                                                                 \
+    mrb_cpp_delete<ClassName>(mrb, static_cast<ClassName*>(ptr)); \
+  }                                                               \
+                                                                  \
   static const struct mrb_data_type Identifier##_type = {         \
     #ClassName, Identifier##_free                                 \
-  };                                                             \
-                                                                 \
-  template <>                                                    \
-  struct mrb_data_type_traits<ClassName> {                       \
-    static const mrb_data_type* get() {                          \
+  };                                                              \
+                                                                  \
+  template <>                                                     \
+  struct mrb_data_type_traits<ClassName> {                        \
+    static const mrb_data_type* get() {                           \
       return &Identifier##_type;                                  \
-    }                                                            \
+    }                                                             \
   };

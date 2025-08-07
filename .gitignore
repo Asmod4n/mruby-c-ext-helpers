@@ -52,3 +52,4 @@ build-iPhoneSimulator/
 /.cache/
 build_config.rb.lock
 compile_commands.json
+/.ccls-cache/

@@ -28,6 +28,7 @@ end
 desc "cleanup"
 task :clean do
   Dir.chdir("mruby") do
+    ENV["MRUBY_CONFIG"] = MRUBY_CONFIG_PATH
     sh "rake deep_clean"
   end
 end

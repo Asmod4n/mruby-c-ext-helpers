@@ -1,11 +1,16 @@
+#include <mruby.h>
 #include <mruby/num_helpers.h>
 #include <mruby/string.h>
+#include <string.h>
 
 static mrb_value
 mrb_str_incr(mrb_state *mrb, mrb_value self)
 {
   mrb_int numeric;
-  if (RSTRING_LEN(self) != sizeof(numeric)) mrb_raise(mrb, E_ARGUMENT_ERROR, "supplied string has wrong size");
+  if (RSTRING_LEN(self) != sizeof(numeric)) {
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "wrong string size: expected %d bytes", (int)sizeof(numeric));
+  }
+
   mrb_str_modify(mrb, RSTRING(self));
 
   memcpy(&numeric, (const uint8_t *) RSTRING_PTR(self), sizeof(numeric));

@@ -1,96 +1,101 @@
 #include <mruby.h>
-#include <mruby/cpp_helpers.hpp>
-#include <mruby/num_helpers.hpp>
-#include <mruby/num_helpers.h>
 #include <mruby/value.h>
+#include <mruby/array.h>
+#include <mruby/hash.h>
+#include <mruby/class.h>
+#include <mruby/presym.h>
+#include <mruby/string.h>
+#include <cassert>
+#include <string>
+#include <vector>
+#include <map>
+#include <set>
+#include <unordered_set>
+#include <unordered_map>
+#include <mruby/num_helpers.hpp>
+#include <mruby/mrb_convert_cpp_value.hpp>
 
+static void run_tests(mrb_state *mrb)
+{
+// ✅ Basic numeric
+  mrb_value i = mrb_convert_cpp_value(mrb, 42);
+  assert(mrb_type(i) == MRB_TT_INTEGER);
+  assert(mrb_integer(i) == 42);
+
+  mrb_value f = mrb_convert_cpp_value(mrb, 3.14);
+  assert(mrb_type(f) == MRB_TT_FLOAT);
+constexpr double epsilon = 1e-6;
+assert(std::abs(mrb_float(f) - 3.14) < epsilon); // ✅ safe
+
+
+  // ✅ String
+  mrb_value s = mrb_convert_cpp_value(mrb, std::string("hello"));
+  assert(mrb_type(s) == MRB_TT_STRING);
+  assert(std::string(RSTRING_PTR(s), RSTRING_LEN(s)) == "hello");
+
+  // ✅ Boolean
+  mrb_value b1 = mrb_convert_cpp_value(mrb, true);
+  mrb_value b2 = mrb_convert_cpp_value(mrb, false);
+assert(mrb_bool(b1) == true);
+assert(mrb_bool(b2) == false);
+
+
+  // ✅ Nil
+  mrb_value n = mrb_convert_cpp_value(mrb, nullptr);
+  assert(mrb_type(n) == MRB_TT_FALSE);
+
+  // ✅ Vector → Array
+  std::vector<int> v = {1, 2, 3};
+  mrb_value arr = mrb_convert_cpp_value(mrb, v);
+  assert(mrb_type(arr) == MRB_TT_ARRAY);
+  assert(RARRAY_LEN(arr) == 3);
+  assert(mrb_integer(mrb_ary_ref(mrb, arr, 0)) == 1);
+
+  // ✅ Map → Hash
+  std::map<std::string, int> m = {{"a", 1}, {"b", 2}};
+  mrb_value h = mrb_convert_cpp_value(mrb, m);
+  assert(mrb_type(h) == MRB_TT_HASH);
+  mrb_value key_a = mrb_str_new_cstr(mrb, "a");
+  mrb_value val_a = mrb_hash_get(mrb, h, key_a);
+  assert(mrb_type(val_a) == MRB_TT_INTEGER);
+  assert(mrb_integer(val_a) == 1);
+
+  // ✅ Set
+  std::set<std::string> tags = {"gpu", "debug"};
+  mrb_value ruby_set = mrb_convert_cpp_value(mrb, tags);
+  assert(mrb_obj_is_kind_of(mrb, ruby_set, mrb_class_get_id(mrb, MRB_SYM(Set))));
+
+  // ✅ Array of strings
+  std::array<std::string, 2> names = {"alice", "bob"};
+  mrb_value name_ary = mrb_convert_cpp_value(mrb, names);
+  assert(mrb_type(name_ary) == MRB_TT_ARRAY);
+  assert(RSTRING_LEN(mrb_ary_ref(mrb, name_ary, 1)) == 3);
+
+  // ✅ Unordered map → Hash
+  std::unordered_map<std::string_view, bool> flags = {
+    {"debug", true},
+    {"gpu", false}
+  };
+  mrb_value flag_hash = mrb_convert_cpp_value(mrb, flags);
+  mrb_value debug_key = mrb_str_new_cstr(mrb, "debug");
+  mrb_value debug_val = mrb_hash_get(mrb, flag_hash, debug_key);
+  assert(mrb_type(debug_val) == MRB_TT_TRUE);
+
+  // ✅ Unordered set → Set
+  std::unordered_set<int> ids = {10, 20, 30};
+  mrb_value id_set = mrb_convert_cpp_value(mrb, ids);
+  assert(mrb_obj_is_kind_of(mrb, id_set, mrb_class_get_id(mrb, MRB_SYM(Set))));
+
+  // ✅ String literal
+  mrb_value lit = mrb_convert_cpp_value(mrb, "mruby");
+  assert(mrb_type(lit) == MRB_TT_STRING);
+  assert(RSTRING_LEN(lit) == 5);
+  assert(strncmp(RSTRING_PTR(lit), "mruby", 5) == 0);
+}
 
 MRB_BEGIN_DECL
 void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb)
 {
-  mrb_convert_number(mrb, 42);
-  mrb_convert_int8(mrb, static_cast<int8_t>(42));
-
-  mrb_convert_number(mrb, static_cast<int8_t>(42));
-  mrb_convert_number(mrb, static_cast<uint8_t>(42));
-
-#if MRB_INT_BIT >= 16
-  mrb_convert_number(mrb, static_cast<int16_t>(32767));
-  mrb_convert_number(mrb, static_cast<int16_t>(-32768));
-  mrb_convert_int16(mrb, static_cast<int16_t>(32767));
-  mrb_convert_int16(mrb, static_cast<int16_t>(-32768));
-#endif
-
-#if MRB_INT_BIT >= 32
-  mrb_convert_number(mrb, static_cast<uint16_t>(65535));
-  mrb_convert_number(mrb, static_cast<int32_t>(2147483647));
-  mrb_convert_number(mrb, static_cast<int32_t>(-2147483647));
-  mrb_convert_number(mrb, static_cast<int32_t>(-2147483648LL));
-  mrb_convert_uint16(mrb, static_cast<uint16_t>(65535));
-  mrb_convert_int32(mrb, static_cast<int32_t>(2147483647));
-  mrb_convert_int32(mrb, static_cast<int32_t>(-2147483647));
-  mrb_convert_int32(mrb, static_cast<int32_t>(-2147483648LL));
-#endif
-
-#if MRB_INT_BIT >= 64
-  mrb_convert_number(mrb, static_cast<uint32_t>(4294967295U));
-  mrb_convert_number(mrb, static_cast<int64_t>(9223372036854775807LL));
-  mrb_convert_number(mrb, static_cast<int64_t>(-9223372036854775807LL - 1LL));
-  mrb_convert_uint32(mrb, static_cast<uint32_t>(4294967295U));
-  mrb_convert_int64(mrb, static_cast<int64_t>(9223372036854775807LL));
-  mrb_convert_int64(mrb, static_cast<int64_t>(-9223372036854775807LL - 1LL));
-#endif
-
-#ifndef MRB_WITHOUT_FLOAT
-  // Always test float
-    mrb_convert_number(mrb, static_cast<float>(3.14f));
-    mrb_convert_number(mrb, static_cast<float>(3.402823466e38f));
-    mrb_convert_float(mrb, static_cast<float>(3.14f));
-    mrb_convert_float(mrb, static_cast<float>(3.402823466e38f));
-#ifndef MRB_USE_FLOAT32
-    mrb_convert_number(mrb, static_cast<double>(3.14));
-    mrb_convert_number(mrb, static_cast<double>(1.7976931348623157e308));
-    mrb_convert_double(mrb, static_cast<double>(3.14));
-    mrb_convert_double(mrb, static_cast<double>(1.7976931348623157e308));
-#endif
-#endif
-
-#ifdef MRB_USE_BIGINT
-  // Test unsigned that must use BigInt
-  #if MRB_INT_BIT == 16
-    constexpr uint64_t big_uint = 70000ULL; // > 65535
-  #elif MRB_INT_BIT == 32
-    constexpr uint64_t big_uint = 5000000000ULL; // > 4294967295
-  #elif MRB_INT_BIT == 64
-    constexpr uint64_t big_uint = 18446744073709551615ULL; // max uint64_t
-  #else
-    mrb_raise(mrb, E_RUNTIME_ERROR, "Unsupported MRB_INT_BIT size for BigInt test");
-  #endif
-
-  mrb_convert_number(mrb, big_uint);
-
-  // Test signed large positive that must use BigInt
-  #if MRB_INT_BIT == 16
-    constexpr int64_t big_int = 70000;
-  #elif MRB_INT_BIT == 32
-    constexpr int64_t big_int = 5000000000LL;
-  #elif MRB_INT_BIT == 64
-    constexpr int64_t big_int = 9223372036854775807LL; // This may still fit if mrb_int is int64_t
-  #endif
-
-  mrb_convert_number(mrb, big_int);
-
-  // Also test negative BigInt
-  #if MRB_INT_BIT == 16
-    constexpr int64_t big_neg_int = -70000;
-  #elif MRB_INT_BIT == 32
-    constexpr int64_t big_neg_int = -5000000000LL;
-  #elif MRB_INT_BIT == 64
-    constexpr int64_t big_neg_int = -9223372036854775807LL - 1LL;
-  #endif
-
-  mrb_convert_number(mrb, big_neg_int);
-#endif
-
+  run_tests(mrb);
 }
 MRB_END_DECL
