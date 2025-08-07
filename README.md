@@ -8,7 +8,7 @@ You need a c++17 compatible compiler to build this.
 Sample code to wrap calling new and delete on a c++ class
 
 ```c++
-MRB_CPP_DEFINE_TYPE(ClassName)
+MRB_CPP_DEFINE_TYPE(ClassName, UniqueIdenifier)
 
 mrb_cpp_new<ClassName>(mrb, self, ...);
 ```
