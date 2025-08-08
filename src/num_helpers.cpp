@@ -55,6 +55,8 @@ MRB_DEFINE_CONVERTER(long, long)
 MRB_DEFINE_CONVERTER(unsigned long, ulong)
 MRB_DEFINE_CONVERTER(long long, long_long)
 MRB_DEFINE_CONVERTER(unsigned long long, ulong_long)
+MRB_DEFINE_CONVERTER(size_t, size_t)
+MRB_DEFINE_CONVERTER(ssize_t, ssize_t)
 
 #ifndef MRB_NO_FLOAT
 MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value) { \

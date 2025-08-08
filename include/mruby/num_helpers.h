@@ -12,26 +12,14 @@ MRB_BEGIN_DECL
 MRB_API mrb_value mrb_convert_int8(mrb_state* mrb, int8_t value);
 MRB_API mrb_value mrb_convert_uint8(mrb_state* mrb, uint8_t value);
 
-#if MRB_INT_BIT >= 16
 MRB_API mrb_value mrb_convert_int16(mrb_state* mrb, int16_t value);
-#if defined(MRB_USE_BIGINT) || MRB_INT_BIT >= 32
 MRB_API mrb_value mrb_convert_uint16(mrb_state* mrb, uint16_t value);
-#endif
-#endif
 
-#if MRB_INT_BIT >= 32
 MRB_API mrb_value mrb_convert_int32(mrb_state* mrb, int32_t value);
-#if defined(MRB_USE_BIGINT) || MRB_INT_BIT >= 64
 MRB_API mrb_value mrb_convert_uint32(mrb_state* mrb, uint32_t value);
-#endif
-#endif
 
-#if MRB_INT_BIT >= 64
 MRB_API mrb_value mrb_convert_int64(mrb_state* mrb, int64_t value);
-#if defined(MRB_USE_BIGINT) || MRB_INT_BIT >= 128
 MRB_API mrb_value mrb_convert_uint64(mrb_state* mrb, uint64_t value);
-#endif
-#endif
 
 #ifndef MRB_NO_FLOAT
 MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value);
@@ -48,6 +36,10 @@ MRB_API mrb_value mrb_convert_ushort(mrb_state* mrb, unsigned short value);
 MRB_API mrb_value mrb_convert_uint(mrb_state* mrb, unsigned int value);
 MRB_API mrb_value mrb_convert_ulong(mrb_state* mrb, unsigned long value);
 MRB_API mrb_value mrb_convert_ulong_long(mrb_state* mrb, unsigned long long value);
+
+MRB_API mrb_value mrb_convert_size_t(mrb_state* mrb, size_t value);
+MRB_API mrb_value mrb_convert_ssize_t(mrb_state* mrb, ssize_t value);
+
 
 MRB_API mrb_value MRB_ENCODE_FIX_NAT(mrb_state *mrb, mrb_int numeric);
 MRB_API mrb_value MRB_DECODE_FIX_NAT(mrb_state *mrb, mrb_value bin);
