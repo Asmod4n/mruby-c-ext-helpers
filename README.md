@@ -8,9 +8,21 @@ You need a c++17 compatible compiler to build this.
 Sample code to wrap calling new and delete on a c++ class
 
 ```c++
-MRB_CPP_DEFINE_TYPE(ClassName, UniqueIdenifier)
+MRB_CPP_DEFINE_TYPE(ClassName, UniqueIdentifier)
 
 mrb_cpp_new<ClassName>(mrb, self, ...);
 ```
 
 Put that in the initialize method of a mruby class which has the MRB_TT_DATA type and mruby will manage the lifetime of your c++ Object. Arguments will get forwarded to the new method of your c++ class.
+
+
+Convert most c++ values to mruby objects:
+
+```c++
+std::vector<int> v = {1, 2, 3};
+mrb_value arr = mrb_convert_cpp_value(mrb, v);
+assert(mrb_type(arr) == MRB_TT_ARRAY);
+assert(RARRAY_LEN(arr) == 3);
+assert(mrb_integer(mrb_ary_ref(mrb, arr, 0)) == 1);
+```
+This works with numbers, maps, sets, strings, vectors and a few more which can be represented in mruby.
