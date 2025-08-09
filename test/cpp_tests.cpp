@@ -60,6 +60,30 @@ assert(mrb_bool(b2) == false);
   assert(mrb_type(val_a) == MRB_TT_INTEGER);
   assert(mrb_integer(val_a) == 1);
 
+  // ✅ system_clock → Time
+  auto sys_now = std::chrono::system_clock::now();
+  mrb_value sys_time = mrb_convert_cpp_value(mrb, sys_now);
+  assert(mrb_obj_is_kind_of(mrb, sys_time, mrb_class_get_id(mrb, MRB_SYM(Time))));
+
+  // ✅ steady_clock → Time (converted via system_clock)
+  auto steady_now = std::chrono::steady_clock::now();
+  mrb_value steady_time = mrb_convert_cpp_value(mrb, steady_now);
+  assert(mrb_obj_is_kind_of(mrb, steady_time, mrb_class_get_id(mrb, MRB_SYM(Time))));
+
+  // ✅ high_resolution_clock → Time (converted via system_clock)
+  auto highres_now = std::chrono::high_resolution_clock::now();
+  mrb_value highres_time = mrb_convert_cpp_value(mrb, highres_now);
+  assert(mrb_obj_is_kind_of(mrb, highres_time, mrb_class_get_id(mrb, MRB_SYM(Time))));
+
+  // ✅ Check microsecond precision is preserved (within bounds)
+  auto precise = std::chrono::system_clock::now();
+  mrb_value precise_time = mrb_convert_cpp_value(mrb, precise);
+  mrb_value usec_val = mrb_funcall_id(mrb, precise_time, MRB_SYM(usec), 0);
+  assert(mrb_type(usec_val) == MRB_TT_INTEGER);
+  assert(mrb_integer(usec_val) >= 0);
+  assert(mrb_integer(usec_val) < 1000000);
+
+
   // ✅ Set
   std::set<std::string> tags = {"gpu", "debug"};
   mrb_value ruby_set = mrb_convert_cpp_value(mrb, tags);
