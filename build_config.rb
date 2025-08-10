@@ -5,7 +5,7 @@ MRuby::Build.new do |conf|
   is_macos = host_os =~ /darwin/
   is_linux = host_os =~ /linux/
 
-  conf.toolchain :gcc
+  conf.toolchain :clang
 
   # Common flags
   conf.enable_debug

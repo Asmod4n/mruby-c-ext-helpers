@@ -10,6 +10,8 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <array>
+#include <cstring>
 #include <unordered_set>
 #include <unordered_map>
 #include <mruby/num_helpers.hpp>
