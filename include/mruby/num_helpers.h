@@ -6,6 +6,7 @@
 #include <mruby/value.h>
 #include <mruby/numeric.h>
 #include <mruby/dump.h>
+#include <sys/types.h>
 
 MRB_BEGIN_DECL
 

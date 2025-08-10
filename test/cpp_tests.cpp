@@ -16,9 +16,11 @@
 #include <unordered_map>
 #include <mruby/num_helpers.hpp>
 #include <mruby/mrb_convert_cpp_value.hpp>
+#include <mruby/num_helpers.h>
 
 static void run_tests(mrb_state *mrb)
 {
+  mrb_convert_int8(mrb, 1);
 // ✅ Basic numeric
   mrb_value i = mrb_convert_cpp_value(mrb, 42);
   assert(mrb_type(i) == MRB_TT_INTEGER);
@@ -103,7 +105,7 @@ assert(mrb_bool(b2) == false);
     {"gpu", false}
   };
   mrb_value flag_hash = mrb_convert_cpp_value(mrb, flags);
-  mrb_value debug_key = mrb_str_new_cstr(mrb, "debug");
+  mrb_value debug_key = mrb_str_new_lit(mrb, "debug");
   mrb_value debug_val = mrb_hash_get(mrb, flag_hash, debug_key);
   assert(mrb_type(debug_val) == MRB_TT_TRUE);
 

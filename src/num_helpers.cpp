@@ -4,6 +4,7 @@
 #include <mruby/value.h>
 #include <limits>
 #include <type_traits>
+#include <string>
 
 namespace mrbcpp::number_converter {
   template <typename T>
@@ -23,13 +24,36 @@ namespace mrbcpp::number_converter {
     }
 #endif
   }
+
+  template <typename T>
+  std::string type_name_from_signature() {
+  #if defined(__clang__) || defined(__GNUC__)
+    std::string sig = __PRETTY_FUNCTION__;
+    auto start = sig.find("T = ") + 4;
+    auto end = sig.find(']', start);
+    return sig.substr(start, end - start);
+  #elif defined(_MSC_VER)
+    std::string sig = __FUNCSIG__;
+    auto start = sig.find("T = ") + 4;
+    auto end = sig.find('>');
+    return sig.substr(start, end - start);
+  #else
+    return "unknown";
+  #endif
+  }
+
   template <typename T>
   static mrb_value mrb_convert_number_safe(mrb_state* mrb, T value) {
     static_assert(std::is_integral<T>::value, "Expected integral type");
     if constexpr (fits_in_mrb_int<T>()) {
       return mrb_convert_number(mrb, value);
     } else {
-      mrb_raise(mrb, E_RANGE_ERROR, "Type too large for current mruby build");
+      mrb_raise(mrb, E_RANGE_ERROR,
+        ("mruby was compiled with MRB_INT_BIT = " + std::to_string(MRB_INT_BIT) +
+        ", but attempted to convert type '" + type_name_from_signature<T>() +
+        "' (size = " + std::to_string(sizeof(T) * 8) + " bits), which exceeds the supported range.").c_str());
+
+      return mrb_undef_value();
     }
   }
 }
