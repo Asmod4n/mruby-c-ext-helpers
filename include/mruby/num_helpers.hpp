@@ -28,7 +28,12 @@ namespace mrbcpp::number_converter {
 template <typename T>
 constexpr MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
   using limits = std::numeric_limits<T>;
-  if constexpr (std::is_floating_point_v<T>) {
+
+  if constexpr (std::is_enum_v<T>) {
+    // Convert enum to its underlying type and recurse
+    using Underlying = std::underlying_type_t<T>;
+    return mrb_convert_number(mrb, static_cast<Underlying>(value));
+  } else if constexpr (std::is_floating_point_v<T>) {
 #ifndef MRB_NO_FLOAT
     if constexpr (limits::lowest() >= std::numeric_limits<mrb_float>::lowest() &&
                   limits::max()    <= std::numeric_limits<mrb_float>::max()) {
