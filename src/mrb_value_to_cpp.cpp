@@ -38,10 +38,10 @@ inline MapKey mrb_value_to_map_key(mrb_state* mrb, mrb_value val) {
             return std::string("undefined");
 #ifndef MRB_NO_FLOAT
         case MRB_TT_FLOAT:
-            return static_cast<double>(mrb_float(val));
+            return mrb_float(val);
 #endif
         case MRB_TT_INTEGER:
-            return static_cast<int64_t>(mrb_integer(val));
+            return mrb_integer(val);
         case MRB_TT_STRING:
             return std::string(RSTRING_PTR(val), RSTRING_LEN(val));
 #ifdef MRB_USE_BIGINT
