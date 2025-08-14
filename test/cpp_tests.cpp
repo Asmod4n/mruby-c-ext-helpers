@@ -12,20 +12,20 @@
 #include <map>
 #include <set>
 #include <array>
+#include <cstring>
 #include <unordered_set>
 #include <unordered_map>
 #include <mruby/num_helpers.hpp>
 #include <mruby/mrb_convert_cpp_value.hpp>
-#include <mruby/mrb_value_to_cpp.hpp>
-MRB_BEGIN_DECL
-#include <mruby/internal.h>
-MRB_END_DECL
+#include <mruby/num_helpers.h>
 
-static void run_value_to_cpp_tests(mrb_state* mrb) {
-    // --- Scalars ---
-    mrb_value i = mrb_convert_cpp_value(mrb, 42);
-    std::any ai = mrb_value_to_any(mrb, i);
-    assert(std::any_cast<mrb_int>(ai) == 42);
+static void run_tests(mrb_state *mrb)
+{
+  mrb_convert_int8(mrb, 1);
+// ✅ Basic numeric
+  mrb_value i = mrb_convert_cpp_value(mrb, 42);
+  assert(mrb_type(i) == MRB_TT_INTEGER);
+  assert(mrb_integer(i) == 42);
 
     mrb_value f = mrb_convert_cpp_value(mrb, 3.14);
     std::any af = mrb_value_to_any(mrb, f);
@@ -111,11 +111,23 @@ static void run_cpp_to_mrb_tests(mrb_state* mrb) {
     mrb_value uval = mrb_convert_cpp_value(mrb, umap);
     assert(mrb_bool(mrb_hash_get(mrb, uval, mrb_str_new_cstr(mrb,"x"))));
 
+<<<<<<< HEAD
     // --- set-like ---
     std::set<int> sset = {10,20};
     mrb_value sset_val = mrb_convert_cpp_value(mrb, sset);
     struct RClass* set_cls = mrb_class_get_id(mrb, MRB_SYM(Set));
     assert(mrb_obj_is_kind_of(mrb, sset_val, set_cls));
+=======
+  // ✅ Unordered map → Hash
+  std::unordered_map<std::string_view, bool> flags = {
+    {"debug", true},
+    {"gpu", false}
+  };
+  mrb_value flag_hash = mrb_convert_cpp_value(mrb, flags);
+  mrb_value debug_key = mrb_str_new_lit(mrb, "debug");
+  mrb_value debug_val = mrb_hash_get(mrb, flag_hash, debug_key);
+  assert(mrb_type(debug_val) == MRB_TT_TRUE);
+>>>>>>> cebf9187566b58f48a2656f801685a0a79e677e1
 
     std::unordered_set<std::string> uset = {"foo","bar"};
     mrb_value uset_val = mrb_convert_cpp_value(mrb, uset);
