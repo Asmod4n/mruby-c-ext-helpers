@@ -36,16 +36,20 @@ inline MapKey mrb_value_to_map_key(mrb_state* mrb, mrb_value val) {
         case MRB_TT_UNDEF:
         case MRB_TT_FREE:
             return std::string("undefined");
+#ifndef MRB_NO_FLOAT
         case MRB_TT_FLOAT:
             return static_cast<double>(mrb_float(val));
+#endif
         case MRB_TT_INTEGER:
             return static_cast<int64_t>(mrb_integer(val));
         case MRB_TT_STRING:
             return std::string(RSTRING_PTR(val), RSTRING_LEN(val));
+#ifdef MRB_USE_BIGINT
         case MRB_TT_BIGINT: {
             mrb_value s = mrb_bint_to_s(mrb, val, 10);
             return std::string(RSTRING_PTR(s), RSTRING_LEN(s));
         }
+#endif
         default:
             throw std::runtime_error("Unsupported or unhandled mrb_value type for map key");
     }
@@ -81,8 +85,10 @@ mrb_value_to_any(mrb_state* mrb, mrb_value val)
         case MRB_TT_UNDEF:
         case MRB_TT_FREE:
             return std::any{};
+#ifndef MRB_NO_FLOAT
         case MRB_TT_FLOAT:
             return mrb_float(val);
+#endif
         case MRB_TT_INTEGER:
             return mrb_integer(val);
         case MRB_TT_HASH:
@@ -92,15 +98,18 @@ mrb_value_to_any(mrb_state* mrb, mrb_value val)
         case MRB_TT_ARRAY:
         case MRB_TT_STRUCT:
             return mrb_array_to_vector(mrb, val);
+#ifdef MRB_USE_BIGINT
         case MRB_TT_BIGINT: {
             mrb_value s = mrb_bint_to_s(mrb, val, 10);
             return std::string(RSTRING_PTR(s), RSTRING_LEN(s));
         }
+#endif
+#ifdef MRB_USE_SET
         case MRB_TT_SET: {
             mrb_value ary = mrb_funcall_id(mrb, val, MRB_SYM(to_a), 0);
             return mrb_array_to_vector(mrb, ary);
         }
-
+#endif
         default:
             throw std::runtime_error("Unsupported or unhandled mrb_value type");
     }

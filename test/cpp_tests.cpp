@@ -22,11 +22,11 @@ static void run_value_to_cpp_tests(mrb_state* mrb) {
     // --- Scalars ---
     mrb_value i = mrb_convert_cpp_value(mrb, 42);
     std::any ai = mrb_value_to_any(mrb, i);
-    assert(std::any_cast<int64_t>(ai) == 42);
+    assert(std::any_cast<mrb_int>(ai) == 42);
 
     mrb_value f = mrb_convert_cpp_value(mrb, 3.14);
     std::any af = mrb_value_to_any(mrb, f);
-    assert(std::abs(std::any_cast<double>(af) - 3.14) < 1e-6);
+    assert(std::abs(std::any_cast<mrb_float>(af) - 3.14) < 1e-6);
 
     // --- Boolean ---
     mrb_value t = mrb_convert_cpp_value(mrb, true);
@@ -54,14 +54,14 @@ static void run_value_to_cpp_tests(mrb_state* mrb) {
     mrb_value arr = mrb_convert_cpp_value(mrb, vec);
     std::any avec = mrb_value_to_any(mrb, arr);
     auto vec_out = std::any_cast<std::vector<std::any>>(avec);
-    assert(std::any_cast<int64_t>(vec_out[0]) == 1);
+    assert(std::any_cast<mrb_int>(vec_out[0]) == 1);
 
     // --- Hash ---
     std::map<std::string,int> m = {{"a", 1}, {"b", 2}};
     mrb_value h = mrb_convert_cpp_value(mrb, m);
     std::any ah = mrb_value_to_any(mrb, h);
     auto map_out = std::any_cast<std::map<MapKey,std::any>>(ah);
-    assert(std::any_cast<int64_t>(map_out[std::string("a")]) == 1);
+    assert(std::any_cast<mrb_int>(map_out[std::string("a")]) == 1);
 
     // --- Set ---
     std::set<std::string> sset = {"x","y"};
