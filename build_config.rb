@@ -3,9 +3,8 @@ MRuby::Build.new do |conf|
   host_os = RbConfig::CONFIG['host_os']
   is_windows = host_os =~ /mswin|mingw|cygwin/
   is_macos = host_os =~ /darwin/
-  is_linux = host_os =~ /linux/
 
-  conf.toolchain :gcc
+  conf.toolchain :clang
 
   # Common flags
   conf.enable_debug
