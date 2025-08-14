@@ -14,6 +14,7 @@
 #include <type_traits>
 #include "branch_pred.h"
 #include <chrono>
+#include "num_helpers.hpp"
 
 namespace mrbcpp::value_converter {
   template <typename T, typename = void>
@@ -92,7 +93,7 @@ namespace mrbcpp::value_converter {
       } else if constexpr (is_set_like_v<T>) {
         struct RClass* set_class = mrb_class_get_id(mrb, MRB_SYM(Set));
         if (unlikely(!set_class)) {
-          mrb_raise(mrb, E_NAME_ERROR, "Set class not defined — is it included in your mruby build");
+          mrb_raise(mrb, E_NAME_ERROR, "Set class not defined — is it included in your mruby build?");
         }
 
         mrb_value ruby_set = mrb_obj_new(mrb, set_class, 0, nullptr);
