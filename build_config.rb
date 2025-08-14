@@ -15,9 +15,6 @@ MRuby::Build.new do |conf|
   # Enable sanitizers only on POSIX platforms
   unless is_windows
     conf.enable_sanitizer "address,undefined"
-    unless is_macos
-      conf.linker.flags_before_libraries << '-static-libasan'
-    end
   end
 
   # macOS-specific header paths (Apple Clang & SDK)
