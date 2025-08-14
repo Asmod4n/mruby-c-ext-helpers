@@ -5,31 +5,28 @@
 #include <mruby/class.h>
 #include <mruby/presym.h>
 #include <mruby/string.h>
-#include <cstring>
 #include <cassert>
 #include <string>
 #include <vector>
-#include <map>
-#include <set>
 #include <array>
-#include <cstring>
-#include <unordered_set>
+#include <map>
 #include <unordered_map>
-#include <mruby/num_helpers.hpp>
+#include <set>
+#include <unordered_set>
+#include <chrono>
+#include <any>
+#include <mruby/mrb_value_to_cpp.hpp>
 #include <mruby/mrb_convert_cpp_value.hpp>
-#include <mruby/num_helpers.h>
 
-static void run_tests(mrb_state *mrb)
-{
-  mrb_convert_int8(mrb, 1);
-// ✅ Basic numeric
-  mrb_value i = mrb_convert_cpp_value(mrb, 42);
-  assert(mrb_type(i) == MRB_TT_INTEGER);
-  assert(mrb_integer(i) == 42);
+static void run_value_to_cpp_tests(mrb_state* mrb) {
+    // --- Scalars ---
+    mrb_value i = mrb_convert_cpp_value(mrb, 42);
+    std::any ai = mrb_value_to_any(mrb, i);
+    assert(std::any_cast<int64_t>(ai) == 42);
 
     mrb_value f = mrb_convert_cpp_value(mrb, 3.14);
     std::any af = mrb_value_to_any(mrb, f);
-    assert(std::abs(std::any_cast<mrb_float>(af) - 3.14) < 1e-6);
+    assert(std::abs(std::any_cast<double>(af) - 3.14) < 1e-6);
 
     // --- Boolean ---
     mrb_value t = mrb_convert_cpp_value(mrb, true);
@@ -57,14 +54,14 @@ static void run_tests(mrb_state *mrb)
     mrb_value arr = mrb_convert_cpp_value(mrb, vec);
     std::any avec = mrb_value_to_any(mrb, arr);
     auto vec_out = std::any_cast<std::vector<std::any>>(avec);
-    assert(std::any_cast<mrb_int>(vec_out[0]) == 1);
+    assert(std::any_cast<int64_t>(vec_out[0]) == 1);
 
     // --- Hash ---
     std::map<std::string,int> m = {{"a", 1}, {"b", 2}};
     mrb_value h = mrb_convert_cpp_value(mrb, m);
     std::any ah = mrb_value_to_any(mrb, h);
     auto map_out = std::any_cast<std::map<MapKey,std::any>>(ah);
-    assert(std::any_cast<mrb_int>(map_out[std::string("a")]) == 1);
+    assert(std::any_cast<int64_t>(map_out[std::string("a")]) == 1);
 
     // --- Set ---
     std::set<std::string> sset = {"x","y"};
@@ -111,23 +108,11 @@ static void run_cpp_to_mrb_tests(mrb_state* mrb) {
     mrb_value uval = mrb_convert_cpp_value(mrb, umap);
     assert(mrb_bool(mrb_hash_get(mrb, uval, mrb_str_new_cstr(mrb,"x"))));
 
-<<<<<<< HEAD
     // --- set-like ---
     std::set<int> sset = {10,20};
     mrb_value sset_val = mrb_convert_cpp_value(mrb, sset);
     struct RClass* set_cls = mrb_class_get_id(mrb, MRB_SYM(Set));
     assert(mrb_obj_is_kind_of(mrb, sset_val, set_cls));
-=======
-  // ✅ Unordered map → Hash
-  std::unordered_map<std::string_view, bool> flags = {
-    {"debug", true},
-    {"gpu", false}
-  };
-  mrb_value flag_hash = mrb_convert_cpp_value(mrb, flags);
-  mrb_value debug_key = mrb_str_new_lit(mrb, "debug");
-  mrb_value debug_val = mrb_hash_get(mrb, flag_hash, debug_key);
-  assert(mrb_type(debug_val) == MRB_TT_TRUE);
->>>>>>> cebf9187566b58f48a2656f801685a0a79e677e1
 
     std::unordered_set<std::string> uset = {"foo","bar"};
     mrb_value uset_val = mrb_convert_cpp_value(mrb, uset);
