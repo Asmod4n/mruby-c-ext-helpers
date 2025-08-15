@@ -3,9 +3,8 @@ MRuby::Build.new do |conf|
   host_os = RbConfig::CONFIG['host_os']
   is_windows = host_os =~ /mswin|mingw|cygwin/
   is_macos = host_os =~ /darwin/
-  is_linux = host_os =~ /linux/
 
-  conf.toolchain :gcc
+  conf.toolchain :clang
 
   # Common flags
   conf.enable_debug
@@ -16,9 +15,6 @@ MRuby::Build.new do |conf|
   # Enable sanitizers only on POSIX platforms
   unless is_windows
     conf.enable_sanitizer "address,undefined"
-    unless is_macos
-      conf.linker.flags_before_libraries << '-static-libasan'
-    end
   end
 
   # macOS-specific header paths (Apple Clang & SDK)
