@@ -5,9 +5,5 @@ MRuby::Gem::Specification.new('mruby-c-ext-helpers') do |spec|
   spec.add_test_dependency 'mruby-time'
   spec.add_dependency 'mruby-errno'
 
-  if spec.for_windows?
-    spec.cxx_flags << '/std=c++17'
-  else
-    spec.cxx.flags << '-std=c++17'
-  end
+  spec.cxx.flags << '-std=c++17'
 end
