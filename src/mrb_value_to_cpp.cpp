@@ -2,16 +2,20 @@
 #include <mruby/string.h>
 #include <mruby/array.h>
 #include <mruby/hash.h>
-MRB_BEGIN_DECL
-#include <mruby/internal.h>
-MRB_END_DECL
-#include <stdexcept>
 #include <string>
 #include <mruby/presym.h>
+#include <mruby/branch_pred.h>
+#include <mruby/numeric.h>
 
 MRB_API std::vector<std::any>
 mrb_array_to_vector(mrb_state* mrb, mrb_value ary)
 {
+    switch (mrb_type(ary)) {
+        case MRB_TT_ARRAY:
+        case MRB_TT_STRUCT:
+            break;
+        default: mrb_raise(mrb, E_TYPE_ERROR, "not an array or struct");
+    }
     mrb_int len = RARRAY_LEN(ary);
     std::vector<std::any> out;
     out.reserve(len);
@@ -21,7 +25,6 @@ mrb_array_to_vector(mrb_state* mrb, mrb_value ary)
     return out;
 }
 
-// Convert an mrb_value into a valid map key
 inline MapKey mrb_value_to_map_key(mrb_state* mrb, mrb_value val) {
     switch (mrb_type(val)) {
         case MRB_TT_FALSE:
@@ -46,18 +49,19 @@ inline MapKey mrb_value_to_map_key(mrb_state* mrb, mrb_value val) {
             return std::string(RSTRING_PTR(val), RSTRING_LEN(val));
 #ifdef MRB_USE_BIGINT
         case MRB_TT_BIGINT: {
-            mrb_value s = mrb_bint_to_s(mrb, val, 10);
+            mrb_value s = mrb_integer_to_str(mrb, val, 10);
             return std::string(RSTRING_PTR(s), RSTRING_LEN(s));
         }
 #endif
         default:
-            throw std::runtime_error("Unsupported or unhandled mrb_value type for map key");
+            mrb_raise(mrb, E_TYPE_ERROR, "Unsupported or unhandled mrb_value type for map key");
     }
 }
 
 MRB_API std::map<MapKey, std::any>
 mrb_hash_to_map(mrb_state* mrb, mrb_value hash)
 {
+    if(unlikely(!mrb_hash_p(hash))) mrb_raise(mrb, E_TYPE_ERROR, "not a hash");
     std::map<MapKey, std::any> out;
     mrb_value keys = mrb_hash_keys(mrb, hash);
     mrb_int len = RARRAY_LEN(keys);
@@ -100,7 +104,7 @@ mrb_value_to_any(mrb_state* mrb, mrb_value val)
             return mrb_array_to_vector(mrb, val);
 #ifdef MRB_USE_BIGINT
         case MRB_TT_BIGINT: {
-            mrb_value s = mrb_bint_to_s(mrb, val, 10);
+            mrb_value s = mrb_integer_to_str(mrb, val, 10);
             return std::string(RSTRING_PTR(s), RSTRING_LEN(s));
         }
 #endif
@@ -111,6 +115,6 @@ mrb_value_to_any(mrb_state* mrb, mrb_value val)
         }
 #endif
         default:
-            throw std::runtime_error("Unsupported or unhandled mrb_value type");
+            mrb_raise(mrb, E_TYPE_ERROR, "Unsupported or unhandled mrb_value type");
     }
 }

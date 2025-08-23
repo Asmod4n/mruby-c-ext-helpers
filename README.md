@@ -10,6 +10,7 @@ Sample code to wrap calling new and delete on a c++ class
 ```c++
 #include <mruby/cpp_helpers.hpp>
 MRB_CPP_DEFINE_TYPE(ClassName, UniqueIdentifier)
+//add the above outside a function call
 
 mrb_cpp_new<ClassName>(mrb, self, ...);
 ```
@@ -20,9 +21,9 @@ Put that in the initialize method of a mruby class which has the MRB_TT_DATA typ
 Convert most c++ values to mruby objects:
 
 ```c++
-#include <mruby/mrb_convert_cpp_value.hpp>
+#include <mruby/cpp_to_mrb_value.hpp>
 std::vector<int> v = {1, 2, 3};
-mrb_value arr = mrb_convert_cpp_value(mrb, v);
+mrb_value arr = cpp_to_mrb_value(mrb, v);
 assert(mrb_type(arr) == MRB_TT_ARRAY);
 assert(RARRAY_LEN(arr) == 3);
 assert(mrb_integer(mrb_ary_ref(mrb, arr, 0)) == 1);
@@ -39,4 +40,22 @@ mrb_value number = mrb_convert_size_t(mrb, n);
 
 long long l = -15;
 number = mrb_convert_long_long(mrb, l);
+```
+
+convert most mruby objects to c++ values
+```c++
+#include <mruby/mrb_value_to_cpp.hpp>
+
+mrb_value s = mrb_str_new_lit(mrb, "hello");
+std::any as = mrb_value_to_any(mrb, s);
+assert(std::any_cast<std::string>(as) == "hello");
+```
+this exposes the following functions:
+```c++
+MRB_API std::any mrb_value_to_any(mrb_state* mrb, mrb_value val);
+MRB_API std::vector<std::any> mrb_array_to_vector(mrb_state* mrb, mrb_value ary);
+
+// Map keys can be int64_t, double, or string
+using MapKey = std::variant<int64_t, double, std::string>;
+MRB_API std::map<MapKey, std::any> mrb_hash_to_map(mrb_state* mrb, mrb_value hash);
 ```

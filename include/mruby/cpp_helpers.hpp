@@ -31,7 +31,7 @@ MRB_API void mrb_cpp_delete(mrb_state* mrb, T* ptr) {
                                                                   \
   template <>                                                     \
   struct mrb_data_type_traits<ClassName> {                        \
-    static const mrb_data_type* get() {                           \
+    static const struct mrb_data_type* get() {                    \
       return &Identifier##_type;                                  \
     }                                                             \
   };

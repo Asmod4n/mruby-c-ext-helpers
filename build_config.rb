@@ -14,7 +14,7 @@ MRuby::Build.new do |conf|
 
   # Enable sanitizers only on POSIX platforms
   unless is_windows
-    conf.enable_sanitizer "address,undefined"
+   conf.enable_sanitizer "address,undefined"
   end
 
   # macOS-specific header paths (Apple Clang & SDK)
