@@ -8,21 +8,34 @@
 
 namespace mrbcpp::number_converter {
   template <typename T>
-  constexpr static bool fits_in_mrb_int() {
-#if defined(MRB_USE_BIGINT)
+  constexpr bool fits_in_mrb_int() {
+#ifdef MRB_USE_BIGINT
     return true;
 #else
     using mrb_int_limits = std::numeric_limits<mrb_int>;
-    using T_limits = std::numeric_limits<T>;
+    using T_limits       = std::numeric_limits<T>;
 
-    if constexpr (std::is_signed<T>::value) {
-      return T_limits::min() >= mrb_int_limits::min &&
-            T_limits::max() <= mrb_int_limits::max;
-    } else {
-      // unsigned types must not exceed mrb_int's max
-      return T_limits::max() <= mrb_int_limits::max;
+#if defined(__SIZEOF_INT128__)
+    if constexpr (std::is_same_v<T, __int128>) {
+      // Signed 128: must be within mrb_int range
+      return (static_cast<__int128>(mrb_int_limits::min()) >= T_limits::min()) &&
+             (static_cast<__int128>(mrb_int_limits::max()) <= T_limits::max());
+    }
+    if constexpr (std::is_same_v<T, unsigned __int128>) {
+      // Unsigned 128: only upper bound matters
+      return static_cast<unsigned __int128>(mrb_int_limits::max()) >= T_limits::max();
     }
 #endif
+
+    if constexpr (std::is_signed_v<T>) {
+      return T_limits::min() >= mrb_int_limits::min() &&
+             T_limits::max() <= mrb_int_limits::max();
+    } else if constexpr (std::is_unsigned_v<T>) {
+      return T_limits::max() <= static_cast<std::make_unsigned_t<mrb_int>>(mrb_int_limits::max());
+    } else {
+      return false;
+    }
+  #endif
   }
 
   template <typename T>
@@ -43,8 +56,20 @@ namespace mrbcpp::number_converter {
   }
 
   template <typename T>
+  struct is_extended_integral : std::is_integral<T> {};
+
+  #if defined(__SIZEOF_INT128__)
+  template <> struct is_extended_integral<__int128> : std::true_type {};
+  template <> struct is_extended_integral<unsigned __int128> : std::true_type {};
+  #endif
+
+  template <typename T>
+  inline constexpr bool is_extended_integral_v = is_extended_integral<T>::value;
+
+
+  template <typename T>
   static mrb_value mrb_convert_number_safe(mrb_state* mrb, T value) {
-    static_assert(std::is_integral<T>::value, "Expected integral type");
+    static_assert(is_extended_integral_v<T>, "Expected integral type");
     if constexpr (fits_in_mrb_int<T>()) {
       return mrb_convert_number(mrb, value);
     } else {
@@ -52,8 +77,6 @@ namespace mrbcpp::number_converter {
         ("mruby was compiled with MRB_INT_BIT = " + std::to_string(MRB_INT_BIT) +
         ", but attempted to convert type '" + type_name_from_signature<T>() +
         "' (size = " + std::to_string(sizeof(T) * 8) + " bits), which exceeds the supported range.").c_str());
-
-      return mrb_undef_value();
     }
   }
 }
@@ -71,6 +94,10 @@ MRB_DEFINE_CONVERTER(int32_t, int32)
 MRB_DEFINE_CONVERTER(uint32_t, uint32)
 MRB_DEFINE_CONVERTER(int64_t, int64)
 MRB_DEFINE_CONVERTER(uint64_t, uint64)
+#if defined(__SIZEOF_INT128__)
+MRB_DEFINE_CONVERTER(__int128, int128)
+MRB_DEFINE_CONVERTER(unsigned __int128, uint128)
+#endif
 MRB_DEFINE_CONVERTER(short, short)
 MRB_DEFINE_CONVERTER(unsigned short, ushort)
 MRB_DEFINE_CONVERTER(int, int)
@@ -81,6 +108,7 @@ MRB_DEFINE_CONVERTER(long long, long_long)
 MRB_DEFINE_CONVERTER(unsigned long long, ulong_long)
 MRB_DEFINE_CONVERTER(size_t, size_t)
 MRB_DEFINE_CONVERTER(ssize_t, ssize_t)
+
 
 #ifndef MRB_NO_FLOAT
 MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value) { \

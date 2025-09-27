@@ -24,12 +24,6 @@ namespace mrbcpp::number_converter {
            std::numeric_limits<T>::max()    <= MRB_INT_MAX;
   }
 
-  // Compile-time: is the TYPE wider than mrb_int and can overflow it?
-  template <typename T>
-  constexpr bool type_needs_bint() {
-    return !type_fits_int<T>();
-  }
-
 #if defined(__SIZEOF_INT128__)
   template <typename T> struct is_int128   : std::false_type {};
   template <typename T> struct is_uint128  : std::false_type {};
@@ -134,7 +128,6 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
     return mrb_bint_new_int128(mrb, static_cast<__int128>(value));
 #else
     mrb_raise(mrb, E_RANGE_ERROR, "__int128 too large and BigInt disabled");
-    return mrb_undef_value();
 #endif
   }
   else if constexpr (is_uint128<T>::value) {
