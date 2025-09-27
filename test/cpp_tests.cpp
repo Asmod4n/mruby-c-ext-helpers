@@ -142,9 +142,98 @@ static void run_cpp_to_mrb_tests(mrb_state* mrb) {
 }
 MRB_CPP_DEFINE_TYPE(std::string, stdstring)
 
+void test_edges(mrb_state* mrb) {
+  // --- Fixnum boundaries ---
+  {
+    mrb_value v = mrb_convert_number(mrb, MRB_FIXNUM_MIN);
+    assert(mrb_fixnum_p(v));
+    assert(mrb_fixnum(v) == MRB_FIXNUM_MIN);
+
+    v = mrb_convert_number(mrb, MRB_FIXNUM_MAX);
+    assert(mrb_fixnum_p(v));
+    assert(mrb_fixnum(v) == MRB_FIXNUM_MAX);
+
+#if defined(__SIZEOF_INT128__)
+    // Just outside fixnum range
+    auto over_fix = (__int128)MRB_FIXNUM_MAX + 1;
+    v = mrb_convert_number(mrb, over_fix);
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == over_fix);
+
+    auto under_fix = (__int128)MRB_FIXNUM_MIN - 1;
+    v = mrb_convert_number(mrb, under_fix);
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == under_fix);
+#endif
+  }
+
+  // --- mrb_int boundaries ---
+  {
+    mrb_value v = mrb_convert_number(mrb, MRB_INT_MIN);
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == MRB_INT_MIN);
+
+    v = mrb_convert_number(mrb, MRB_INT_MAX);
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == MRB_INT_MAX);
+
+#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
+    auto over_int = (__int128)MRB_INT_MAX + 1;
+    v = mrb_convert_number(mrb, over_int);
+    assert(mrb_bigint_p(v));
+
+    auto under_int = (__int128)MRB_INT_MIN - 1;
+    v = mrb_convert_number(mrb, under_int);
+    assert(mrb_bigint_p(v));
+#endif
+  }
+
+  // --- Unsigned types ---
+  {
+    mrb_value v = mrb_convert_number(mrb, uint64_t{0});
+    assert(mrb_fixnum_p(v));
+    assert(mrb_fixnum(v) == 0);
+
+    v = mrb_convert_number(mrb, static_cast<uint64_t>(MRB_INT_MAX));
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == MRB_INT_MAX);
+
+#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
+    auto over_uint = static_cast<uint64_t>((__int128)MRB_INT_MAX + 1);
+    v = mrb_convert_number(mrb, over_uint);
+    assert(mrb_bigint_p(v));
+
+    v = mrb_convert_number(mrb, std::numeric_limits<uint64_t>::max());
+    assert(mrb_bigint_p(v));
+#endif
+  }
+
+  // --- Signed types ---
+  {
+    mrb_value v = mrb_convert_number(mrb, int64_t{MRB_INT_MIN});
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == MRB_INT_MIN);
+
+    v = mrb_convert_number(mrb, int64_t{MRB_INT_MAX});
+    assert(mrb_integer_p(v));
+    assert(mrb_integer(v) == MRB_INT_MAX);
+
+#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
+    auto over_sint = (__int128)MRB_INT_MAX + 1;
+    v = mrb_convert_number(mrb, over_sint);
+    assert(mrb_bigint_p(v));
+
+    auto under_sint = (__int128)MRB_INT_MIN - 1;
+    v = mrb_convert_number(mrb, under_sint);
+    assert(mrb_bigint_p(v));
+#endif
+  }
+}
+
 MRB_BEGIN_DECL
 void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
     run_value_to_cpp_tests(mrb);
     run_cpp_to_mrb_tests(mrb);
+    test_edges(mrb);
 }
 MRB_END_DECL
