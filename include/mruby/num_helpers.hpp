@@ -10,18 +10,26 @@ MRB_BEGIN_DECL
 MRB_END_DECL
 
 namespace mrbcpp::number_converter {
-  // Compile-time: does the full TYPE range fit into fixnum?
   template <typename T>
   constexpr bool type_fits_fixnum() {
-    return std::numeric_limits<T>::lowest() >= MRB_FIXNUM_MIN &&
-           std::numeric_limits<T>::max()    <= MRB_FIXNUM_MAX;
+    if constexpr (std::is_signed_v<T>) {
+      return std::numeric_limits<T>::lowest() >= MRB_FIXNUM_MIN &&
+             std::numeric_limits<T>::max()    <= MRB_FIXNUM_MAX;
+    } else {
+      using U = std::make_unsigned_t<mrb_int>;
+      return std::numeric_limits<T>::max() <= static_cast<U>(MRB_FIXNUM_MAX);
+    }
   }
 
-  // Compile-time: does the full TYPE range fit into mrb_int?
   template <typename T>
   constexpr bool type_fits_int() {
-    return std::numeric_limits<T>::lowest() >= MRB_INT_MIN &&
-           std::numeric_limits<T>::max()    <= MRB_INT_MAX;
+    if constexpr (std::is_signed_v<T>) {
+      return std::numeric_limits<T>::lowest() >= MRB_INT_MIN &&
+             std::numeric_limits<T>::max()    <= MRB_INT_MAX;
+    } else {
+      using U = std::make_unsigned_t<mrb_int>;
+      return std::numeric_limits<T>::max() <= static_cast<U>(MRB_INT_MAX);
+    }
   }
 
 #if defined(__SIZEOF_INT128__)
@@ -59,13 +67,11 @@ template <typename T>
 MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
   using namespace mrbcpp::number_converter;
 
-  // --- Enums: recurse on underlying type
   if constexpr (std::is_enum_v<T>) {
     using U = std::underlying_type_t<T>;
     return mrb_convert_number(mrb, static_cast<U>(value));
   }
 
-  // --- Floating point
   else if constexpr (std::is_floating_point_v<T>) {
 #ifndef MRB_NO_FLOAT
     if constexpr (std::numeric_limits<T>::lowest() >= std::numeric_limits<mrb_float>::lowest() &&
@@ -79,19 +85,14 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
 #endif
   }
 
-  // --- Integral types (standard widths)
   else if constexpr (std::is_integral_v<T>) {
-    // Compile-time fast lanes
     if constexpr (type_fits_fixnum<T>()) {
       return mrb_fixnum_value(static_cast<mrb_int>(value));
     } else if constexpr (type_fits_int<T>()) {
-      // mrb_int_value decides fixnum vs boxed internally
       return mrb_int_value(mrb, static_cast<mrb_int>(value));
     }
 
-    // Runtime refinement for types that don't fit mrb_int entirely
     if constexpr (std::is_signed_v<T>) {
-      // Signed: check full int-range first, then BigInt
       if (value >= MRB_INT_MIN && value <= MRB_INT_MAX) {
         return mrb_int_value(mrb, static_cast<mrb_int>(value));
       }
@@ -105,7 +106,6 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
       mrb_raise(mrb, E_RANGE_ERROR, "Signed integer too large for mrb_int and BigInt disabled");
 #endif
     } else {
-      // Unsigned: only upper bound matters; lower bound is always >= 0
       if (value <= static_cast<std::make_unsigned_t<mrb_int>>(MRB_INT_MAX)) {
         return mrb_int_value(mrb, static_cast<mrb_int>(value));
       }
@@ -117,10 +117,8 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
     }
   }
 
-  // --- Explicit 128-bit handling
 #if defined(__SIZEOF_INT128__)
   else if constexpr (is_int128<T>::value) {
-    // If representable by mrb_int, prefer that
     if (value >= static_cast<T>(MRB_INT_MIN) && value <= static_cast<T>(MRB_INT_MAX)) {
       return mrb_int_value(mrb, static_cast<mrb_int>(value));
     }
@@ -142,6 +140,5 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
   }
 #endif
 
-  // --- Unsupported numeric type fallback
   mrb_raise(mrb, E_TYPE_ERROR, "Unsupported numeric type");
 }
