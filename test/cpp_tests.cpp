@@ -140,7 +140,61 @@ static void run_cpp_to_mrb_tests(mrb_state* mrb) {
     struct RClass* time_cls = mrb_class_get_id(mrb, MRB_SYM(Time));
     assert(mrb_obj_is_kind_of(mrb, tval, time_cls));
 }
-MRB_CPP_DEFINE_TYPE(std::string, stdstring)
+
+// ----------------------------------------------
+// Subclassing tests for MRB_CPP_DEFINE_TYPE
+// ----------------------------------------------
+
+struct BaseTest {
+  int v;
+  BaseTest(int x) : v(x) {}
+  virtual ~BaseTest() = default;
+};
+
+struct DerivedTest : BaseTest {
+  DerivedTest(int x) : BaseTest(x) {}
+};
+
+struct MoreDerivedTest : DerivedTest {
+  MoreDerivedTest(int x) : DerivedTest(x) {}
+};
+
+// Register only the BASE class
+MRB_CPP_DEFINE_TYPE(BaseTest, basetest)
+
+static void run_subclassing_tests(mrb_state* mrb) {
+  // --- Base ---
+  mrb_value o1 = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, mrb->object_class));
+  BaseTest* b = mrb_cpp_new<BaseTest>(mrb, o1, 10);
+  assert(b->v == 10);
+  assert(DATA_TYPE(o1) == &basetest_type);
+
+  // --- Derived ---
+  mrb_value o2 = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, mrb->object_class));
+  DerivedTest* d = mrb_cpp_new<DerivedTest>(mrb, o2, 20);
+  assert(d->v == 20);
+  assert(DATA_TYPE(o2) == &basetest_type);  // same type!
+
+  // --- MoreDerived ---
+  mrb_value o3 = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, mrb->object_class));
+  MoreDerivedTest* md = mrb_cpp_new<MoreDerivedTest>(mrb, o3, 30);
+  assert(md->v == 30);
+  assert(DATA_TYPE(o3) == &basetest_type);  // same type!
+
+  // --- mrb_data_get_ptr works for all ---
+  BaseTest* b1 = (BaseTest*)mrb_data_get_ptr(mrb, o1, &basetest_type);
+  BaseTest* b2 = (BaseTest*)mrb_data_get_ptr(mrb, o2, &basetest_type);
+  BaseTest* b3 = (BaseTest*)mrb_data_get_ptr(mrb, o3, &basetest_type);
+
+  assert(b1->v == 10);
+  assert(b2->v == 20);
+  assert(b3->v == 30);
+
+  // --- Name is correct (namespace stripped) ---
+  assert(std::string(basetest_type.struct_name) == "BaseTest");
+
+}
+
 
 void test_edges(mrb_state* mrb) {
   // --- Fixnum boundaries ---
@@ -235,5 +289,6 @@ void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
     run_value_to_cpp_tests(mrb);
     run_cpp_to_mrb_tests(mrb);
     test_edges(mrb);
+    run_subclassing_tests(mrb);
 }
 MRB_END_DECL
