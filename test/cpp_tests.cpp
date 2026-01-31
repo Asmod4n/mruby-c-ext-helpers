@@ -230,10 +230,54 @@ void test_edges(mrb_state* mrb) {
   }
 }
 
+// -------------------------------------------------------------
+// Test: mrb_cpp_new + mrb_cpp_get round‑trip
+// -------------------------------------------------------------
+
+struct TestThing {
+  int x;
+  int y;
+
+  TestThing(int a, int b) : x(a), y(b) {}
+  ~TestThing() = default;
+};
+
+MRB_CPP_DEFINE_TYPE(TestThing, testthing)
+
+static void run_cpp_data_roundtrip_test(mrb_state* mrb) {
+  // Define a Ruby class to hold the DATA object
+  struct RClass* cls =
+      mrb_define_class(mrb, "TestThingHolder", mrb->object_class);
+  MRB_SET_INSTANCE_TT(cls, MRB_TT_DATA);
+
+  // Define initialize that constructs TestThing(10, 20)
+  mrb_define_method(
+      mrb, cls, "initialize",
+      [](mrb_state* mrb, mrb_value self) -> mrb_value {
+        mrb_cpp_new<TestThing>(mrb, self, 10, 20);
+        return self;
+      },
+      MRB_ARGS_NONE()
+  );
+
+  // Create a Ruby object
+  mrb_value obj = mrb_obj_new(mrb, cls, 0, nullptr);
+
+  // Retrieve the C++ instance
+  TestThing* ptr = mrb_cpp_get<TestThing>(mrb, obj);
+
+  // Validate
+  assert(ptr != nullptr);
+  assert(ptr->x == 10);
+  assert(ptr->y == 20);
+}
+
+
 MRB_BEGIN_DECL
 void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
     run_value_to_cpp_tests(mrb);
     run_cpp_to_mrb_tests(mrb);
     test_edges(mrb);
+    run_cpp_data_roundtrip_test(mrb);
 }
 MRB_END_DECL

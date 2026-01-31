@@ -2,6 +2,7 @@
 #include <mruby.h>
 #include <mruby/data.h>
 #include <new>
+#include "branch_pred.h"
 
 template <typename T>
 struct mrb_data_type_traits;
@@ -35,3 +36,9 @@ MRB_API void mrb_cpp_delete(mrb_state* mrb, T* ptr) {
       return &Identifier##_type;                                  \
     }                                                             \
   };
+
+template <typename T>
+T* mrb_cpp_get(mrb_state* mrb, mrb_value obj) {
+  const mrb_data_type* dt = mrb_data_type_traits<T>::get();
+  return static_cast<T*>(mrb_data_get_ptr(mrb, obj, dt));
+}
