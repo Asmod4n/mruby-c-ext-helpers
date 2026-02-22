@@ -67,11 +67,17 @@ template <typename T>
 MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
   using namespace mrbcpp::number_converter;
 
+  // ------------------------------------------------------------
+  // ENUMS
+  // ------------------------------------------------------------
   if constexpr (std::is_enum_v<T>) {
     using U = std::underlying_type_t<T>;
     return mrb_convert_number(mrb, static_cast<U>(value));
   }
 
+  // ------------------------------------------------------------
+  // FLOATING POINT
+  // ------------------------------------------------------------
   else if constexpr (std::is_floating_point_v<T>) {
 #ifndef MRB_NO_FLOAT
     if constexpr (std::numeric_limits<T>::lowest() >= std::numeric_limits<mrb_float>::lowest() &&
@@ -85,13 +91,49 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
 #endif
   }
 
+  // ------------------------------------------------------------
+  // 128‑BIT TYPES — MUST COME BEFORE std::is_integral_v<T>
+  // ------------------------------------------------------------
+#if defined(__SIZEOF_INT128__)
+  else if constexpr (is_int128<T>::value) {
+    if (value >= static_cast<T>(MRB_INT_MIN) && value <= static_cast<T>(MRB_INT_MAX)) {
+      return mrb_int_value(mrb, static_cast<mrb_int>(value));
+    }
+#ifdef MRB_USE_BIGINT
+    return mrb_bint_new_int128(mrb, static_cast<__int128>(value));
+#else
+    mrb_raise(mrb, E_RANGE_ERROR, "__int128 too large and BigInt disabled");
+#endif
+  }
+
+  else if constexpr (is_uint128<T>::value) {
+    if (value <= static_cast<T>(MRB_INT_MAX)) {
+      return mrb_int_value(mrb, static_cast<mrb_int>(value));
+    }
+#ifdef MRB_USE_BIGINT
+    return mrb_bint_new_uint128(mrb, static_cast<unsigned __int128>(value));
+#else
+    mrb_raise(mrb, E_RANGE_ERROR, "unsigned __int128 too large and BigInt disabled");
+#endif
+  }
+#endif // __SIZEOF_INT128__
+
+  // ------------------------------------------------------------
+  // INTEGRAL TYPES (after 128‑bit handling!)
+  // ------------------------------------------------------------
   else if constexpr (std::is_integral_v<T>) {
+
+    // Fits fixnum?
     if constexpr (type_fits_fixnum<T>()) {
       return mrb_fixnum_value(static_cast<mrb_int>(value));
-    } else if constexpr (type_fits_int<T>()) {
+    }
+
+    // Fits mrb_int?
+    else if constexpr (type_fits_int<T>()) {
       return mrb_int_value(mrb, static_cast<mrb_int>(value));
     }
 
+    // Signed overflow
     if constexpr (std::is_signed_v<T>) {
       if (value >= MRB_INT_MIN && value <= MRB_INT_MAX) {
         return mrb_int_value(mrb, static_cast<mrb_int>(value));
@@ -105,7 +147,10 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
 #else
       mrb_raise(mrb, E_RANGE_ERROR, "Signed integer too large for mrb_int and BigInt disabled");
 #endif
-    } else {
+    }
+
+    // Unsigned overflow
+    else {
       if (value <= static_cast<std::make_unsigned_t<mrb_int>>(MRB_INT_MAX)) {
         return mrb_int_value(mrb, static_cast<mrb_int>(value));
       }
@@ -117,28 +162,8 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
     }
   }
 
-#if defined(__SIZEOF_INT128__)
-  else if constexpr (is_int128<T>::value) {
-    if (value >= static_cast<T>(MRB_INT_MIN) && value <= static_cast<T>(MRB_INT_MAX)) {
-      return mrb_int_value(mrb, static_cast<mrb_int>(value));
-    }
-#ifdef MRB_USE_BIGINT
-    return mrb_bint_new_int128(mrb, static_cast<__int128>(value));
-#else
-    mrb_raise(mrb, E_RANGE_ERROR, "__int128 too large and BigInt disabled");
-#endif
-  }
-  else if constexpr (is_uint128<T>::value) {
-    if (value <= static_cast<T>(MRB_INT_MAX)) {
-      return mrb_int_value(mrb, static_cast<mrb_int>(value));
-    }
-#ifdef MRB_USE_BIGINT
-    return mrb_bint_new_uint128(mrb, static_cast<unsigned __int128>(value));
-#else
-    mrb_raise(mrb, E_RANGE_ERROR, "unsigned __int128 too large and BigInt disabled");
-#endif
-  }
-#endif
-
+  // ------------------------------------------------------------
+  // FALLBACK
+  // ------------------------------------------------------------
   mrb_raise(mrb, E_TYPE_ERROR, "Unsupported numeric type");
 }
