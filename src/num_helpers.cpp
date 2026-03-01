@@ -138,7 +138,7 @@ MRB_DECODE_FIX_NAT(mrb_state *mrb, mrb_value bin)
   if (RSTRING_LEN(bin) != sizeof(numeric)) mrb_raise(mrb, E_ARGUMENT_ERROR, "Encoded Data cannot be decoded");
 
   memcpy(&numeric, (const uint8_t *) RSTRING_PTR(bin), sizeof(numeric));
-  return mrb_fixnum_value(numeric);
+  return mrb_int_value(mrb, numeric);
 }
 
 MRB_API mrb_value
@@ -178,7 +178,7 @@ MRB_DECODE_FIX_LE(mrb_state *mrb, mrb_value bin)
     memcpy(&numeric, (const uint8_t *) RSTRING_PTR(bin), sizeof(numeric));
 #endif
 
-  return mrb_fixnum_value(numeric);
+  return mrb_int_value(mrb, numeric);
 }
 
 MRB_API mrb_value
@@ -218,7 +218,7 @@ MRB_DECODE_FIX_BE(mrb_state *mrb, mrb_value bin)
     }
 #endif
 
-  return mrb_fixnum_value(numeric);
+  return mrb_int_value(mrb, numeric);
 }
 
 #ifndef MRB_NO_FLOAT

@@ -7,4 +7,9 @@ MRuby::Gem::Specification.new('mruby-c-ext-helpers') do |spec|
   spec.add_test_dependency 'mruby-bigint'
   spec.add_test_dependency 'mruby-struct'
   spec.add_test_dependency 'mruby-compiler'
+  if spec.for_windows?
+    spec.cxx.flags << '/std:c++17'
+  else
+    spec.cxx.flags << '-std=c++17'
+  end
 end
