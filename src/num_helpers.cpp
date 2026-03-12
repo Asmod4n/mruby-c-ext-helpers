@@ -108,7 +108,7 @@ MRB_DEFINE_CONVERTER(long long, long_long)
 MRB_DEFINE_CONVERTER(unsigned long long, ulong_long)
 MRB_DEFINE_CONVERTER(size_t, size_t)
 MRB_DEFINE_CONVERTER(ssize_t, ssize_t)
-
+MRB_DEFINE_CONVERTER(mrb_int, mrb_int)
 
 #ifndef MRB_NO_FLOAT
 MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value) { \
