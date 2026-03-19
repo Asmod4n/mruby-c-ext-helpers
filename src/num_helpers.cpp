@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <mruby.h>
 #include <mruby/num_helpers.h>
 #include <mruby/num_helpers.hpp>
@@ -109,6 +110,7 @@ MRB_DEFINE_CONVERTER(unsigned long long, ulong_long)
 MRB_DEFINE_CONVERTER(size_t, size_t)
 MRB_DEFINE_CONVERTER(ssize_t, ssize_t)
 MRB_DEFINE_CONVERTER(mrb_int, mrb_int)
+MRB_DEFINE_CONVERTER(ptrdiff_t, ptrdiff)
 
 #ifndef MRB_NO_FLOAT
 MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value) { \

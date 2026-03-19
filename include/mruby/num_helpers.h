@@ -45,6 +45,7 @@ MRB_API mrb_value mrb_convert_ulong_long(mrb_state* mrb, unsigned long long valu
 MRB_API mrb_value mrb_convert_size_t(mrb_state* mrb, size_t value);
 MRB_API mrb_value mrb_convert_ssize_t(mrb_state* mrb, ssize_t value);
 MRB_API mrb_value mrb_convert_mrb_int(mrb_state* mrb, mrb_int value);
+MRB_API mrb_value mrb_convert_ptrdiff(mrb_state* mrb, ptrdiff_t value);
 
 MRB_API mrb_value MRB_ENCODE_FIX_NAT(mrb_state *mrb, mrb_int numeric);
 MRB_API mrb_value MRB_DECODE_FIX_NAT(mrb_state *mrb, mrb_value bin);
