@@ -80,11 +80,18 @@ MRB_API mrb_value mrb_convert_number(mrb_state* mrb, T value) {
   // ------------------------------------------------------------
   else if constexpr (std::is_floating_point_v<T>) {
 #ifndef MRB_NO_FLOAT
-    if constexpr (std::numeric_limits<T>::lowest() >= std::numeric_limits<mrb_float>::lowest() &&
+if constexpr (std::numeric_limits<T>::lowest() >= std::numeric_limits<mrb_float>::lowest() &&
                   std::numeric_limits<T>::max()    <= std::numeric_limits<mrb_float>::max()) {
       return mrb_float_value(mrb, static_cast<mrb_float>(value));
     } else {
-      mrb_raise(mrb, E_RANGE_ERROR, "Float too large for mrb_float");
+      // Type doesn't fit statically, check runtime value
+      if (std::isfinite(value) &&
+          value >= std::numeric_limits<mrb_float>::lowest() &&
+          value <= std::numeric_limits<mrb_float>::max()) {
+        return mrb_float_value(mrb, static_cast<mrb_float>(value));
+      } else {
+        mrb_raise(mrb, E_RANGE_ERROR, "Float too large for mrb_float");
+      }
     }
 #else
     mrb_raise(mrb, E_TYPE_ERROR, "Float support disabled");
