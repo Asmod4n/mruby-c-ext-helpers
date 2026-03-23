@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstddef>
 #include <mruby.h>
 #include <mruby/num_helpers.h>
