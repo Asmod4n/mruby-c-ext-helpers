@@ -143,5 +143,7 @@ namespace mrbcpp::value_converter {
 
 template <typename T>
 constexpr MRB_API mrb_value cpp_to_mrb_value(mrb_state* mrb, T&& val) {
-  return mrbcpp::value_converter::mrb_converter<std::decay_t<T>>::convert(mrb, std::forward<T>(val));
+  mrb_value mruby_val = mrbcpp::value_converter::mrb_converter<std::decay_t<T>>::convert(mrb, std::forward<T>(val));
+  mrb_gc_protect(mrb, mruby_val);
+  return mruby_val;
 }
