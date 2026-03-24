@@ -144,6 +144,7 @@ MRB_API mrb_value
 MRB_ENCODE_FIX_LE(mrb_state *mrb, mrb_int numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
+  mrb_gc_protect(mrb, bin);
 
 #ifdef MRB_ENDIAN_BIG
     uint8_t *dst = (uint8_t *) RSTRING_PTR(bin);
@@ -184,6 +185,7 @@ MRB_API mrb_value
 MRB_ENCODE_FIX_BE(mrb_state *mrb, mrb_int numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
+  mrb_gc_protect(mrb, bin);
 
 #ifdef MRB_ENDIAN_BIG
     memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));
@@ -225,6 +227,7 @@ MRB_API mrb_value
 MRB_ENCODE_FLO_NAT(mrb_state *mrb, mrb_float numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
+  mrb_gc_protect(mrb, bin);
   memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));
   return bin;
 }
@@ -245,6 +248,7 @@ MRB_API mrb_value
 MRB_ENCODE_FLO_LE(mrb_state *mrb, mrb_float numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
+  mrb_gc_protect(mrb, bin);
 
 #ifdef MRB_ENDIAN_BIG
     if (unlikely(sizeof(mrb_float) != sizeof(mrb_int))) mrb_raise(mrb, E_RUNTIME_ERROR, "size of mrb_float and mrb_int differ, cannot encode floats.");
@@ -300,6 +304,7 @@ MRB_API mrb_value
 MRB_ENCODE_FLO_BE(mrb_state *mrb, mrb_float numeric)
 {
   mrb_value bin = mrb_str_new(mrb, NULL, sizeof(numeric));
+  mrb_gc_protect(mrb, bin);
 
 #ifdef MRB_ENDIAN_BIG
     memcpy((uint8_t *) RSTRING_PTR(bin), &numeric, sizeof(numeric));

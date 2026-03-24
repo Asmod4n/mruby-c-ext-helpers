@@ -64,6 +64,7 @@ mrb_hash_to_map(mrb_state* mrb, mrb_value hash)
     if(unlikely(!mrb_hash_p(hash))) mrb_raise(mrb, E_TYPE_ERROR, "not a hash");
     std::map<MapKey, std::any> out;
     mrb_value keys = mrb_hash_keys(mrb, hash);
+    mrb_gc_protect(mrb, keys);
     mrb_int len = RARRAY_LEN(keys);
     for (mrb_int i = 0; i < len; ++i) {
         mrb_value k = mrb_ary_ref(mrb, keys, i);

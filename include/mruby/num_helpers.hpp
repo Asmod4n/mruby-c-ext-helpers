@@ -47,9 +47,12 @@ namespace mrbcpp::number_converter {
 
     mrb_value v_lo = mrb_bint_new_uint64(mrb, lo);
     if (hi == 0) return v_lo;
+    mrb_gc_protect(mrb, v_lo);
 
     mrb_value v_hi = mrb_bint_new_uint64(mrb, hi);
+    mrb_gc_protect(mrb, v_hi);
     mrb_value v_hi_shift = mrb_bint_lshift(mrb, v_hi, 64);
+    mrb_gc_protect(mrb, v_hi_shift);
     return mrb_bint_add(mrb, v_hi_shift, v_lo);
   }
 
@@ -58,6 +61,7 @@ namespace mrbcpp::number_converter {
     unsigned __int128 mag = neg ? static_cast<unsigned __int128>(-s)
                                 : static_cast<unsigned __int128>(s);
     mrb_value v = mrb_bint_new_uint128(mrb, mag);
+    mrb_gc_protect(mrb, v);
     return neg ? mrb_bint_neg(mrb, v) : v;
   }
 #endif

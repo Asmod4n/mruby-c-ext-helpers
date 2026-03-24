@@ -82,6 +82,7 @@ namespace mrbcpp::value_converter {
         return mrb_nil_value();
       } else if constexpr (is_map_like_v<T>) {
         mrb_value hash = mrb_hash_new(mrb);
+        mrb_gc_protect(mrb, hash);
         int arena_index = mrb_gc_arena_save(mrb);
         for (const auto& [k, v] : val) {
           mrb_hash_set(mrb, hash,
@@ -97,6 +98,7 @@ namespace mrbcpp::value_converter {
         }
 
         mrb_value ruby_set = mrb_obj_new(mrb, set_class, 0, nullptr);
+        mrb_gc_protect(mrb, ruby_set);
         int arena_index = mrb_gc_arena_save(mrb);
         for (const auto& item : val) {
           mrb_funcall_id(mrb, ruby_set, MRB_SYM(add), 1, cpp_to_mrb_value(mrb, item));
@@ -105,6 +107,7 @@ namespace mrbcpp::value_converter {
         return ruby_set;
       } else if constexpr (is_iterable_v<T>) {
         mrb_value ary = mrb_ary_new_capa(mrb, static_cast<mrb_int>(std::size(val)));
+        mrb_gc_protect(mrb, ary);
         int arena_index = mrb_gc_arena_save(mrb);
         for (const auto& item : val) {
           mrb_ary_push(mrb, ary, cpp_to_mrb_value(mrb, item));
@@ -120,7 +123,9 @@ namespace mrbcpp::value_converter {
         auto micros = duration_cast<microseconds>(duration).count() % 1000000;
 
         mrb_value sec = mrb_convert_number(mrb, time);
+        mrb_gc_protect(mrb, sec);
         mrb_value usec = mrb_convert_number(mrb, micros);
+        mrb_gc_protect(mrb, usec);
 
         struct RClass* time_class = mrb_class_get_id(mrb, MRB_SYM(Time));
         if (unlikely(!time_class)) {
