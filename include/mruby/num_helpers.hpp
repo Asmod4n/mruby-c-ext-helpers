@@ -42,27 +42,38 @@ namespace mrbcpp::number_converter {
 
 #if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
   static inline mrb_value mrb_bint_new_uint128(mrb_state* mrb, unsigned __int128 u) {
+    int idx = mrb_gc_arena_save(mrb);
     uint64_t lo = static_cast<uint64_t>(u);
     uint64_t hi = static_cast<uint64_t>(u >> 64);
 
     mrb_value v_lo = mrb_bint_new_uint64(mrb, lo);
-    if (hi == 0) return v_lo;
+    if (hi == 0) {
+      mrb_gc_arena_restore(mrb, idx);
+      mrb_gc_protect(mrb, v_lo);
+      return v_lo;
+    }
     mrb_gc_protect(mrb, v_lo);
 
     mrb_value v_hi = mrb_bint_new_uint64(mrb, hi);
     mrb_gc_protect(mrb, v_hi);
     mrb_value v_hi_shift = mrb_bint_lshift(mrb, v_hi, 64);
     mrb_gc_protect(mrb, v_hi_shift);
-    return mrb_bint_add(mrb, v_hi_shift, v_lo);
+    mrb_value res = mrb_bint_add(mrb, v_hi_shift, v_lo);
+    mrb_gc_arena_restore(mrb, idx);
+    mrb_gc_protect(mrb, res);
+    return res;
   }
 
   static inline mrb_value mrb_bint_new_int128(mrb_state* mrb, __int128 s) {
+    int idx = mrb_gc_arena_save(mrb);
     bool neg = s < 0;
     unsigned __int128 mag = neg ? static_cast<unsigned __int128>(-s)
                                 : static_cast<unsigned __int128>(s);
     mrb_value v = mrb_bint_new_uint128(mrb, mag);
-    mrb_gc_protect(mrb, v);
-    return neg ? mrb_bint_neg(mrb, v) : v;
+    mrb_value res =  neg ? mrb_bint_neg(mrb, v) : v;
+    mrb_gc_arena_restore(mrb, idx);
+    mrb_gc_protect(mrb, res);
+    return res;
   }
 #endif
 }
