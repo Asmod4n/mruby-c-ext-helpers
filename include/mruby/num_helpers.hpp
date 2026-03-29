@@ -100,7 +100,7 @@ if constexpr (std::numeric_limits<T>::lowest() >= std::numeric_limits<mrb_float>
       return mrb_float_value(mrb, static_cast<mrb_float>(value));
     } else {
       // Type doesn't fit statically, check runtime value
-      if (std::isfinite(value) &&
+      if (isfinite(value) &&
           value >= std::numeric_limits<mrb_float>::lowest() &&
           value <= std::numeric_limits<mrb_float>::max()) {
         return mrb_float_value(mrb, static_cast<mrb_float>(value));
