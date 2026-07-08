@@ -1,8 +1,10 @@
 name: CI
 
+# push covers only master so that PR branches run exactly once (via the
+# pull_request event) and master runs once per merge.
 on:
   push:
-    branches: [master, 'claude/**']
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -13,7 +15,6 @@ jobs:
   hygiene:
     name: session-url-hygiene
     runs-on: ubuntu-latest
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-hygiene
       cancel-in-progress: true
@@ -40,7 +41,6 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
       cancel-in-progress: true
@@ -83,7 +83,6 @@ jobs:
   windows-msvc:
     name: windows-msvc
     runs-on: windows-latest
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-windows-msvc
       cancel-in-progress: true
@@ -106,7 +105,6 @@ jobs:
     name: alpine-musl
     runs-on: ubuntu-latest
     container: alpine:latest
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-alpine-musl
       cancel-in-progress: true
@@ -130,7 +128,6 @@ jobs:
   freebsd:
     name: freebsd
     runs-on: ubuntu-latest
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-freebsd
       cancel-in-progress: true
