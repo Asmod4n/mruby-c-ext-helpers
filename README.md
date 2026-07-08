@@ -5,6 +5,71 @@ Take a look at the test/cpp_tests.cpp file on how to use some of them, or the te
 
 You need a c++17 compatible compiler to build this.
 
+## C++ standard requirements
+
+The C++ headers of this gem (`num_helpers.hpp`, `cpp_helpers.hpp`, `cpp_to_mrb_value.hpp`, `mrb_value_to_cpp.hpp`) require **at least C++17**, and that requirement applies to *every translation unit that includes them* — i.e. also to dependent gems, not just to this gem's own sources. Compiling below C++17 fails fast with a single `#error` from the header.
+
+The flag each toolchain needs:
+
+| Toolchain / platform | Flag | Compiler default without it |
+|---|---|---|
+| gcc (Linux, MinGW) | `-std=c++17` | gnu++17 on gcc 11+ — works by accident |
+| clang / LLVM (Linux, BSD) | `-std=c++17` | gnu++17 on clang 16+ — works by accident |
+| Apple clang (macOS) | `-std=c++17` | **older than C++17 — fails without the flag** |
+| MSVC (Windows) | `/std:c++17` | **C++14 — fails without the flag** |
+
+Loading this gem sets that floor build-wide automatically, so in the common case you don't have to do anything. Two details are worth knowing:
+
+- The floor is strict `c++17`, **not** `gnu++17` — if your code relies on GNU extensions or POSIX prototypes hidden behind feature-test macros, define them yourself (e.g. `_DEFAULT_SOURCE`).
+- mruby's build system never propagates one gem's `spec.cxx.flags` to another gem, which is why the floor has to be applied build-wide. Anything you add yourself in the places below only affects that one place.
+
+Where and how to add a `-std` flag yourself, e.g. when your gem wants something newer than the floor (a flag you add is always respected — the floor skips gems that already carry a `-std` flag, and a later `-std` on the command line wins anyway):
+
+In your gem's `mrbgem.rake`, for your gem's own sources:
+
+```ruby
+MRuby::Gem::Specification.new('my-gem') do |spec|
+  spec.add_dependency 'mruby-c-ext-helpers'
+  if spec.for_windows?
+    spec.cxx.flags << '/std:c++20'
+  else
+    spec.cxx.flags << '-std=c++20'
+  end
+end
+```
+
+In a `build_config.rb`, for every C++ translation unit of that build:
+
+```ruby
+MRuby::Build.new do |conf|
+  toolchain :gcc
+  conf.cxx.flags << '-std=c++20'
+  conf.gem mgem: 'mruby-c-ext-helpers'
+end
+```
+
+Same thing for a Windows build with the Visual C++ toolchain:
+
+```ruby
+MRuby::Build.new do |conf|
+  toolchain :visualcpp
+  conf.cxx.flags << '/std:c++20'
+  conf.gem mgem: 'mruby-c-ext-helpers'
+end
+```
+
+And identically inside a `MRuby::CrossBuild` block for cross-compilation:
+
+```ruby
+MRuby::CrossBuild.new('mytarget') do |conf|
+  toolchain :clang
+  conf.cxx.flags << '-std=c++20'
+  conf.gem mgem: 'mruby-c-ext-helpers'
+end
+```
+
+One MSVC caveat when checking the standard in your own code: MSVC reports `__cplusplus` as `199711L` unless you also pass `/Zc:__cplusplus` — check `_MSVC_LANG` instead (this gem's header guard already does).
+
 Sample code to wrap calling new and delete on a c++ class
 
 ```c++

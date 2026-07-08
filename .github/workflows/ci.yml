@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [master, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: session-url-hygiene
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-hygiene
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+      - name: Check tree and commit messages for session URLs
+        run: |
+          set -eu
+          # Bracket trick keeps this workflow file from matching itself.
+          pattern='claude\.ai/cod[e]|session_0[1]|Claude-Sessio[n]:'
+          status=0
+          if grep -rInE --exclude-dir=.git --exclude-dir=mruby "$pattern" .; then
+            echo "::error::Forbidden session URL found in the tree"
+            status=1
+          fi
+          if git log -50 --format='commit %h%n%B' | grep -En "$pattern"; then
+            echo "::error::Forbidden session URL found in a recent commit message"
+            status=1
+          fi
+          exit "$status"
+
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64-gcc-asan
+            os: ubuntu-latest
+            toolchain: gcc
+            sanitize: '1'
+          - name: linux-x86_64-clang
+            os: ubuntu-latest
+            toolchain: clang
+            sanitize: '0'
+          - name: linux-arm64-gcc
+            os: ubuntu-24.04-arm
+            toolchain: gcc
+            sanitize: '0'
+          - name: macos-arm64
+            os: macos-latest
+            toolchain: clang
+            sanitize: '0'
+          - name: macos-intel
+            os: macos-15-intel
+            toolchain: clang
+            sanitize: '0'
+    env:
+      MRUBY_CONFIG: .github/ci/build_config.rb
+      MRUBY_TOOLCHAIN: ${{ matrix.toolchain }}
+      MRUBY_SANITIZE: ${{ matrix.sanitize }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Build and test
+        run: rake test
+
+  windows-msvc:
+    name: windows-msvc
+    runs-on: windows-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-windows-msvc
+      cancel-in-progress: true
+    env:
+      MRUBY_CONFIG: .github/ci/build_config.rb
+      MRUBY_TOOLCHAIN: visualcpp
+    steps:
+      - uses: actions/checkout@v4
+      # windows-toolchain: none keeps msys2's GNU coreutils link.exe from
+      # shadowing MSVC's linker.
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          windows-toolchain: none
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build and test
+        run: rake test
+
+  alpine-musl:
+    name: alpine-musl
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-alpine-musl
+      cancel-in-progress: true
+    env:
+      MRUBY_CONFIG: .github/ci/build_config.rb
+    steps:
+      - name: Install dependencies
+        run: apk add --no-cache build-base git ruby ruby-rake bison
+      # actions/checkout needs a glibc node runtime, which musl lacks,
+      # so clone manually.
+      - name: Clone repository
+        run: |
+          git config --global --add safe.directory '*'
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout FETCH_HEAD
+      - name: Build and test
+        run: rake test
+
+  freebsd:
+    name: freebsd
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-freebsd
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.3'
+          usesh: true
+          prepare: pkg install -y git gmake ruby rubygem-rake
+          run: |
+            MRUBY_CONFIG=.github/ci/build_config.rb MRUBY_TOOLCHAIN=clang rake test

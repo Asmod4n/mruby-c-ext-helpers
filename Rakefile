@@ -11,26 +11,17 @@ end
 
 desc "compile binary"
 task :compile => :mruby do
-  Dir.chdir("mruby") do
-    ENV["MRUBY_CONFIG"] = MRUBY_CONFIG_PATH
-    sh "rake all"
-  end
+  sh({"MRUBY_CONFIG" => MRUBY_CONFIG_PATH}, "rake all", chdir: "mruby")
 end
 
 desc "test"
 task :test => :mruby do
-  Dir.chdir("mruby") do
-    ENV["MRUBY_CONFIG"] = MRUBY_CONFIG_PATH
-    sh "rake all test"
-  end
+  sh({"MRUBY_CONFIG" => MRUBY_CONFIG_PATH}, "rake all test", chdir: "mruby")
 end
 
 desc "cleanup"
 task :clean do
-  Dir.chdir("mruby") do
-    ENV["MRUBY_CONFIG"] = MRUBY_CONFIG_PATH
-    sh "rake deep_clean"
-  end
+  sh({"MRUBY_CONFIG" => MRUBY_CONFIG_PATH}, "rake deep_clean", chdir: "mruby")
 end
 
 task :default => :test

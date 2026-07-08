@@ -1,0 +1,33 @@
+# Big-endian s390x runs fully emulated and takes hours, so it lives in its
+# own workflow and only triggers on push to master or manual dispatch.
+name: s390x
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  s390x:
+    name: linux-s390x-gcc
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: uraimo/run-on-arch-action@v3
+        with:
+          arch: s390x
+          distro: ubuntu22.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update -q -y
+            apt-get install -q -y build-essential git ruby rake bison ca-certificates
+          run: |
+            MRUBY_CONFIG=.github/ci/build_config.rb rake test
