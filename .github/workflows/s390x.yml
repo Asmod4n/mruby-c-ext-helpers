@@ -1,10 +1,8 @@
 # Big-endian s390x runs fully emulated and takes hours, so it lives in its
-# own workflow and only triggers on push to master or manual dispatch.
+# own workflow and only runs when dispatched manually from the Actions tab.
 name: s390x
 
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 permissions:

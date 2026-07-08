@@ -3,8 +3,8 @@ name: CI
 # Each change runs this matrix exactly once: PR branches via the
 # pull_request event, direct pushes to master via the push event. Pushes
 # that merge a PR are skipped per job below - the PR run already proved
-# them green. (The s390x workflow is separate and intentionally NOT
-# skipped on merges, since it never runs on PRs.)
+# them green. (Big-endian s390x lives in its own manual-dispatch-only
+# workflow.)
 on:
   push:
     branches: [master]
