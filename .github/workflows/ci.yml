@@ -1,7 +1,10 @@
 name: CI
 
-# push covers only master so that PR branches run exactly once (via the
-# pull_request event) and master runs once per merge.
+# Each change runs this matrix exactly once: PR branches via the
+# pull_request event, direct pushes to master via the push event. Pushes
+# that merge a PR are skipped per job below - the PR run already proved
+# them green. (The s390x workflow is separate and intentionally NOT
+# skipped on merges, since it never runs on PRs.)
 on:
   push:
     branches: [master]
@@ -15,6 +18,7 @@ jobs:
   hygiene:
     name: session-url-hygiene
     runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-hygiene
       cancel-in-progress: true
@@ -41,6 +45,7 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.name }}
       cancel-in-progress: true
@@ -83,6 +88,7 @@ jobs:
   windows-msvc:
     name: windows-msvc
     runs-on: windows-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-windows-msvc
       cancel-in-progress: true
@@ -104,6 +110,7 @@ jobs:
   alpine-musl:
     name: alpine-musl
     runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     container: alpine:latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-alpine-musl
@@ -128,6 +135,7 @@ jobs:
   freebsd:
     name: freebsd
     runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-freebsd
       cancel-in-progress: true
