@@ -7,9 +7,13 @@ MRuby::Gem::Specification.new('mruby-c-ext-helpers') do |spec|
   spec.add_test_dependency 'mruby-bigint'
   spec.add_test_dependency 'mruby-struct'
   spec.add_test_dependency 'mruby-compiler'
+  # num_helpers.hpp is consumed by DEPENDENT gems' translation units, and
+  # spec.cxx.flags never propagate to dependents, so the C++17 floor must be
+  # set build-wide. Compiler defaults differ (Apple clang predates C++17,
+  # so its default breaks the constexpr helpers in the header).
   if spec.for_windows?
-    spec.cxx.flags << '/std:c++17'
+    spec.build.cxx.flags << '/std:c++17'
   else
-    spec.cxx.flags << '-std=c++17'
+    spec.build.cxx.flags << '-std=c++17'
   end
 end
