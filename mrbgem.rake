@@ -6,7 +6,6 @@ MRuby::Gem::Specification.new('mruby-c-ext-helpers') do |spec|
   spec.add_test_dependency 'mruby-time'
   spec.add_test_dependency 'mruby-bigint'
   spec.add_test_dependency 'mruby-struct'
-  spec.add_test_dependency 'mruby-compiler'
   # num_helpers.hpp is consumed by DEPENDENT gems' translation units, and
   # gem-level cxx flags never propagate to dependents, so the C++17 floor
   # must be set build-wide. Compiler defaults differ (Apple clang predates

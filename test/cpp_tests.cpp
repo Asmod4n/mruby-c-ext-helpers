@@ -1,3 +1,30 @@
+/*
+ * Test-only Ruby surface over this gem's C++ conversion helpers,
+ * compiled into mrbtest and nothing else (mruby builds test/* of a gem
+ * only for its test binary). Values that used to be parsed from Ruby
+ * source at runtime are now either literals in test/test.rb (compiled
+ * ahead of time by the build's mrbc) or built directly through the
+ * mruby C API below -- neither path touches the compiler, so this gem
+ * needs no mruby-compiler test dependency to reach full coverage.
+ *
+ * Two directions get their own probes:
+ *   CExtHelpersVectors.any_roundtrip(val)
+ *     -> mrb_value_to_any(val), then converts the resulting std::any
+ *        back to an mrb_value so test.rb can assert_equal against the
+ *        original. Exercises mrb_value_to_any / mrb_array_to_vector /
+ *        mrb_hash_to_map, including the MRB_TT_STRUCT and MRB_TT_SET
+ *        branches.
+ *   CExtHelpersVectors.to_mrb_*
+ *     -> each wraps one cpp_to_mrb_value<T> instantiation with a fixed
+ *        C++-side input and returns the mrb_value it produced.
+ *
+ * The remaining checks (numeric edge cases, the MRB_CPP_DEFINE_TYPE
+ * subclassing contract, the mrb_cpp_new/mrb_cpp_get round trip) are
+ * pure C++/C-API exercises with nothing Ruby-observable to assert on
+ * beyond "it ran to completion" -- they keep their original cassert
+ * bodies and are exposed as `?`-suffixed predicates so test.rb still
+ * drives them and mrbtest still reports them by name.
+ */
 #include <mruby.h>
 #include <mruby/value.h>
 #include <mruby/array.h>
@@ -18,127 +45,172 @@
 #include <mruby/cpp_to_mrb_value.hpp>
 #include <mruby/mrb_value_to_cpp.hpp>
 #include <mruby/cpp_helpers.hpp>
-#include <mruby/compile.h>
 
-static void run_value_to_cpp_tests(mrb_state* mrb) {
-  // --- Scalars ---
-  mrb_value i = mrb_load_string(mrb, "42");
-  std::any ai = mrb_value_to_any(mrb, i);
-  assert(std::any_cast<mrb_int>(ai) == 42);
+// -------------------------------------------------------------
+// std::any -> mrb_value, the mirror of mrb_value_to_any, so a Ruby
+// value can be sent through the library's conversion and compared to
+// itself on the other side without a runtime compiler in between.
+// -------------------------------------------------------------
 
-  mrb_value f = mrb_load_string(mrb, "3.14");
-  std::any af = mrb_value_to_any(mrb, f);
-  assert(std::abs(std::any_cast<mrb_float>(af) - 3.14) < 1e-6);
+static mrb_value any_to_mrb(mrb_state* mrb, const std::any& a);
 
-  // --- Boolean ---
-  mrb_value t = mrb_load_string(mrb, "true");
-  mrb_value fval = mrb_load_string(mrb, "false");
-  assert(std::any_cast<bool>(mrb_value_to_any(mrb, t)) == true);
-  assert(std::any_cast<bool>(mrb_value_to_any(mrb, fval)) == false);
-
-  // --- Nil ---
-  mrb_value n = mrb_load_string(mrb, "nil");
-  std::any an = mrb_value_to_any(mrb, n);
-  assert(!an.has_value());
-
-  // --- String ---
-  mrb_value s = mrb_load_string(mrb, "'hello'");
-  std::any as = mrb_value_to_any(mrb, s);
-  assert(std::any_cast<std::string>(as) == "hello");
-
-  // --- Symbol ---
-  mrb_value sym = mrb_load_string(mrb, ":sym");
-  std::any sym_any = mrb_value_to_any(mrb, sym);
-  assert(std::any_cast<std::string>(sym_any) == "sym");
-
-  // --- Array ---
-  mrb_value arr = mrb_load_string(mrb, "[1, 2, 3]");
-  std::any avec = mrb_value_to_any(mrb, arr);
-  auto vec_out = std::any_cast<std::vector<std::any>>(avec);
-  assert(std::any_cast<mrb_int>(vec_out[0]) == 1);
-
-  // --- Struct ---
-  mrb_value struct_val = mrb_load_string(mrb,
-    "Foo = Struct.new(:a, :b); Foo.new(1, 2)");
-  std::any svec = mrb_value_to_any(mrb, struct_val);
-  auto svec_out = std::any_cast<std::vector<std::any>>(svec);
-  assert(std::any_cast<mrb_int>(svec_out[0]) == 1);
-
-  // --- Hash ---
-  mrb_value h = mrb_load_string(mrb, "{'a' => 1, 'b' => 2}");
-  std::any ah = mrb_value_to_any(mrb, h);
-  auto map_out = std::any_cast<std::map<MapKey,std::any>>(ah);
-  assert(std::any_cast<mrb_int>(map_out[std::string("a")]) == 1);
-
-  // --- Set ---
-  // needs 'set' library loaded in mruby
-  mrb_value ruby_set = mrb_load_string(mrb, "Set['x', 'y']");
-  std::any aset = mrb_value_to_any(mrb, ruby_set);
-  auto set_vec = std::any_cast<std::vector<std::any>>(aset);
-  assert(set_vec.size() == 2);
+static mrb_value
+map_key_to_mrb(mrb_state* mrb, const MapKey& k)
+{
+  if (auto p = std::get_if<mrb_int>(&k)) return mrb_int_value(mrb, *p);
+#ifndef MRB_NO_FLOAT
+  if (auto p = std::get_if<mrb_float>(&k)) return mrb_float_value(mrb, *p);
+#endif
+  const auto& s = std::get<std::string>(k);
+  return mrb_str_new(mrb, s.data(), s.size());
 }
 
-static void run_cpp_to_mrb_tests(mrb_state* mrb) {
-    using namespace std::chrono;
+static mrb_value
+any_to_mrb(mrb_state* mrb, const std::any& a)
+{
+  if (!a.has_value()) return mrb_nil_value();
+  if (a.type() == typeid(bool)) return mrb_bool_value(std::any_cast<bool>(a));
+  if (a.type() == typeid(mrb_int)) return mrb_int_value(mrb, std::any_cast<mrb_int>(a));
+#ifndef MRB_NO_FLOAT
+  if (a.type() == typeid(mrb_float)) return mrb_float_value(mrb, std::any_cast<mrb_float>(a));
+#endif
+  if (a.type() == typeid(std::string)) {
+    const auto& s = std::any_cast<const std::string&>(a);
+    return mrb_str_new(mrb, s.data(), s.size());
+  }
+  if (a.type() == typeid(std::vector<std::any>)) {
+    const auto& v = std::any_cast<const std::vector<std::any>&>(a);
+    mrb_value ary = mrb_ary_new_capa(mrb, static_cast<mrb_int>(v.size()));
+    mrb_gc_protect(mrb, ary);
+    int arena_index = mrb_gc_arena_save(mrb);
+    for (const auto& item : v) {
+      mrb_ary_push(mrb, ary, any_to_mrb(mrb, item));
+      mrb_gc_arena_restore(mrb, arena_index);
+    }
+    return ary;
+  }
+  if (a.type() == typeid(std::map<MapKey, std::any>)) {
+    const auto& m = std::any_cast<const std::map<MapKey, std::any>&>(a);
+    mrb_value h = mrb_hash_new(mrb);
+    mrb_gc_protect(mrb, h);
+    int arena_index = mrb_gc_arena_save(mrb);
+    for (const auto& [k, v] : m) {
+      mrb_hash_set(mrb, h, map_key_to_mrb(mrb, k), any_to_mrb(mrb, v));
+      mrb_gc_arena_restore(mrb, arena_index);
+    }
+    return h;
+  }
+  mrb_raise(mrb, E_TYPE_ERROR, "any_to_mrb: unhandled std::any content");
+}
 
-    // --- Booleans ---
-    mrb_value t = cpp_to_mrb_value(mrb, true);
-    mrb_value f = cpp_to_mrb_value(mrb, false);
-    assert(mrb_bool(t));
-    assert(!mrb_bool(f));
+static mrb_value
+any_roundtrip(mrb_state* mrb, mrb_value self)
+{
+  mrb_value val;
+  mrb_get_args(mrb, "o", &val);
+  std::any a = mrb_value_to_any(mrb, val);
+  return any_to_mrb(mrb, a);
+}
 
-    // --- Arithmetic ---
-    mrb_value i = cpp_to_mrb_value(mrb, 123);
-    assert(mrb_integer(i) == 123);
-    mrb_value d = cpp_to_mrb_value(mrb, 3.1415);
-    assert(std::abs(mrb_float(d) - 3.1415) < 1e-6);
+// -------------------------------------------------------------
+// cpp_to_mrb_value<T> probes: fixed C++-side input in, mrb_value out,
+// left for test.rb to check.
+// -------------------------------------------------------------
 
-    // --- Strings ---
-    mrb_value s1 = cpp_to_mrb_value(mrb, std::string("foo"));
-    mrb_value s2 = cpp_to_mrb_value(mrb, std::string_view("bar"));
-    mrb_value s3 = cpp_to_mrb_value(mrb, "baz");
-    assert(std::string(RSTRING_PTR(s1), RSTRING_LEN(s1)) == "foo");
-    assert(std::string(RSTRING_PTR(s2), RSTRING_LEN(s2)) == "bar");
-    assert(std::string(RSTRING_PTR(s3), RSTRING_LEN(s3)) == "baz");
+static mrb_value
+to_mrb_bool(mrb_state* mrb, mrb_value self)
+{
+  mrb_bool b;
+  mrb_get_args(mrb, "b", &b);
+  return cpp_to_mrb_value(mrb, static_cast<bool>(b));
+}
 
-    // --- nullptr ---
-    mrb_value n = cpp_to_mrb_value(mrb, nullptr);
-    assert(mrb_nil_p(n));
+static mrb_value
+to_mrb_int(mrb_state* mrb, mrb_value self)
+{
+  mrb_int i;
+  mrb_get_args(mrb, "i", &i);
+  return cpp_to_mrb_value(mrb, static_cast<int>(i));
+}
 
-    // --- map-like ---
-    std::map<std::string,int> smap = {{"a",1},{"b",2}};
-    mrb_value hash_val = cpp_to_mrb_value(mrb, smap);
-    assert(mrb_type(hash_val) == MRB_TT_HASH);
-    assert(mrb_integer(mrb_hash_get(mrb, hash_val, mrb_str_new_lit(mrb,"a"))) == 1);
+static mrb_value
+to_mrb_double(mrb_state* mrb, mrb_value self)
+{
+  mrb_float f;
+  mrb_get_args(mrb, "f", &f);
+  return cpp_to_mrb_value(mrb, static_cast<double>(f));
+}
 
-    std::unordered_map<std::string,bool> umap = {{"x",true},{"y",false}};
-    mrb_value uval = cpp_to_mrb_value(mrb, umap);
-    assert(mrb_bool(mrb_hash_get(mrb, uval, mrb_str_new_lit(mrb,"x"))));
+static mrb_value
+to_mrb_std_string(mrb_state* mrb, mrb_value self)
+{
+  return cpp_to_mrb_value(mrb, std::string("foo"));
+}
 
-    // --- set-like ---
-    std::set<int> sset = {10,20};
-    mrb_value sset_val = cpp_to_mrb_value(mrb, sset);
-    struct RClass* set_cls = mrb_class_get_id(mrb, MRB_SYM(Set));
-    assert(mrb_obj_is_kind_of(mrb, sset_val, set_cls));
+static mrb_value
+to_mrb_string_view(mrb_state* mrb, mrb_value self)
+{
+  return cpp_to_mrb_value(mrb, std::string_view("bar"));
+}
 
-    std::unordered_set<std::string> uset = {"foo","bar"};
-    mrb_value uset_val = cpp_to_mrb_value(mrb, uset);
-    assert(mrb_obj_is_kind_of(mrb, uset_val, set_cls));
+static mrb_value
+to_mrb_cstr(mrb_state* mrb, mrb_value self)
+{
+  return cpp_to_mrb_value(mrb, "baz");
+}
 
-    // --- iterable containers ---
-    std::vector<int> v = {1,2,3};
-    mrb_value vval = cpp_to_mrb_value(mrb, v);
-    assert(mrb_type(vval) == MRB_TT_ARRAY);
+static mrb_value
+to_mrb_nullptr(mrb_state* mrb, mrb_value self)
+{
+  return cpp_to_mrb_value(mrb, nullptr);
+}
 
-    std::array<std::string,2> arr = {"x","y"};
-    mrb_value aval = cpp_to_mrb_value(mrb, arr);
-    assert(mrb_type(aval) == MRB_TT_ARRAY);
+static mrb_value
+to_mrb_map(mrb_state* mrb, mrb_value self)
+{
+  std::map<std::string, int> smap = {{"a", 1}, {"b", 2}};
+  return cpp_to_mrb_value(mrb, smap);
+}
 
-    // --- time_point ---
-    auto now = system_clock::now();
-    mrb_value tval = cpp_to_mrb_value(mrb, now);
-    struct RClass* time_cls = mrb_class_get_id(mrb, MRB_SYM(Time));
-    assert(mrb_obj_is_kind_of(mrb, tval, time_cls));
+static mrb_value
+to_mrb_unordered_map(mrb_state* mrb, mrb_value self)
+{
+  std::unordered_map<std::string, bool> umap = {{"x", true}, {"y", false}};
+  return cpp_to_mrb_value(mrb, umap);
+}
+
+static mrb_value
+to_mrb_set(mrb_state* mrb, mrb_value self)
+{
+  std::set<int> sset = {10, 20};
+  return cpp_to_mrb_value(mrb, sset);
+}
+
+static mrb_value
+to_mrb_unordered_set(mrb_state* mrb, mrb_value self)
+{
+  std::unordered_set<std::string> uset = {"foo", "bar"};
+  return cpp_to_mrb_value(mrb, uset);
+}
+
+static mrb_value
+to_mrb_vector(mrb_state* mrb, mrb_value self)
+{
+  std::vector<int> v = {1, 2, 3};
+  return cpp_to_mrb_value(mrb, v);
+}
+
+static mrb_value
+to_mrb_array(mrb_state* mrb, mrb_value self)
+{
+  std::array<std::string, 2> arr = {"x", "y"};
+  return cpp_to_mrb_value(mrb, arr);
+}
+
+static mrb_value
+to_mrb_time(mrb_state* mrb, mrb_value self)
+{
+  return cpp_to_mrb_value(mrb, std::chrono::system_clock::now());
 }
 
 // ----------------------------------------------
@@ -192,11 +264,16 @@ static void run_subclassing_tests(mrb_state* mrb) {
 
   // --- Name is correct (namespace stripped) ---
   assert(std::string(basetest_type.struct_name) == "BaseTest");
-
 }
 
+static mrb_value
+subclassing_ok_q(mrb_state* mrb, mrb_value self)
+{
+  run_subclassing_tests(mrb);
+  return mrb_true_value();
+}
 
-void test_edges(mrb_state* mrb) {
+static void test_edges(mrb_state* mrb) {
   // --- Fixnum boundaries ---
   {
     mrb_value v = mrb_convert_number(mrb, MRB_FIXNUM_MIN);
@@ -284,8 +361,15 @@ void test_edges(mrb_state* mrb) {
   }
 }
 
+static mrb_value
+numeric_edges_ok_q(mrb_state* mrb, mrb_value self)
+{
+  test_edges(mrb);
+  return mrb_true_value();
+}
+
 // -------------------------------------------------------------
-// Test: mrb_cpp_new + mrb_cpp_get round‑trip
+// Test: mrb_cpp_new + mrb_cpp_get round-trip
 // -------------------------------------------------------------
 
 struct TestThing {
@@ -326,13 +410,36 @@ static void run_cpp_data_roundtrip_test(mrb_state* mrb) {
   assert(ptr->y == 20);
 }
 
+static mrb_value
+cpp_data_roundtrip_ok_q(mrb_state* mrb, mrb_value self)
+{
+  run_cpp_data_roundtrip_test(mrb);
+  return mrb_true_value();
+}
 
 MRB_BEGIN_DECL
 void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
-    run_value_to_cpp_tests(mrb);
-    run_cpp_to_mrb_tests(mrb);
-    test_edges(mrb);
-    run_cpp_data_roundtrip_test(mrb);
-    run_subclassing_tests(mrb);
+  struct RClass* m = mrb_define_module(mrb, "CExtHelpersVectors");
+
+  mrb_define_module_function(mrb, m, "any_roundtrip", any_roundtrip, MRB_ARGS_REQ(1));
+
+  mrb_define_module_function(mrb, m, "to_mrb_bool", to_mrb_bool, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "to_mrb_int", to_mrb_int, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "to_mrb_double", to_mrb_double, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "to_mrb_std_string", to_mrb_std_string, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_string_view", to_mrb_string_view, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_cstr", to_mrb_cstr, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_nullptr", to_mrb_nullptr, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_map", to_mrb_map, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_unordered_map", to_mrb_unordered_map, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_set", to_mrb_set, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_unordered_set", to_mrb_unordered_set, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_vector", to_mrb_vector, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_array", to_mrb_array, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_time", to_mrb_time, MRB_ARGS_NONE());
+
+  mrb_define_module_function(mrb, m, "numeric_edges_ok?", numeric_edges_ok_q, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "subclassing_ok?", subclassing_ok_q, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "cpp_data_roundtrip_ok?", cpp_data_roundtrip_ok_q, MRB_ARGS_NONE());
 }
 MRB_END_DECL
