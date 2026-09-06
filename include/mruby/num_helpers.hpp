@@ -49,39 +49,24 @@ namespace mrbcpp::number_converter {
 
 
 #if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
+  // A 128-bit value as the sixteen bytes mrb_integer_from_bytes reads,
+  // most significant first. One call, and a Fixnum comes back where the
+  // value fits one.
   static inline mrb_value mrb_bint_new_uint128(mrb_state* mrb, unsigned __int128 u) {
-    int idx = mrb_gc_arena_save(mrb);
-    uint64_t lo = static_cast<uint64_t>(u);
-    uint64_t hi = static_cast<uint64_t>(u >> 64);
-
-    mrb_value v_lo = mrb_bint_new_uint64(mrb, lo);
-    if (hi == 0) {
-      mrb_gc_arena_restore(mrb, idx);
-      mrb_gc_protect(mrb, v_lo);
-      return v_lo;
-    }
-    mrb_gc_protect(mrb, v_lo);
-
-    mrb_value v_hi = mrb_bint_new_uint64(mrb, hi);
-    mrb_gc_protect(mrb, v_hi);
-    mrb_value v_hi_shift = mrb_bint_lshift(mrb, v_hi, 64);
-    mrb_gc_protect(mrb, v_hi_shift);
-    mrb_value res = mrb_bint_add(mrb, v_hi_shift, v_lo);
-    mrb_gc_arena_restore(mrb, idx);
-    mrb_gc_protect(mrb, res);
-    return res;
+    uint8_t b[16];
+    for (int i = 15; i >= 0; i--) { b[i] = static_cast<uint8_t>(u); u >>= 8; }
+    return mrb_integer_from_bytes(mrb, b, sizeof b, 1);
   }
 
   static inline mrb_value mrb_bint_new_int128(mrb_state* mrb, __int128 s) {
-    int idx = mrb_gc_arena_save(mrb);
-    bool neg = s < 0;
-    unsigned __int128 mag = neg ? static_cast<unsigned __int128>(-s)
+    const bool neg = s < 0;
+    // Two's complement negation on the unsigned type: INT128_MIN has no
+    // positive twin as a signed value, and as unsigned it has.
+    unsigned __int128 mag = neg ? (0 - static_cast<unsigned __int128>(s))
                                 : static_cast<unsigned __int128>(s);
-    mrb_value v = mrb_bint_new_uint128(mrb, mag);
-    mrb_value res =  neg ? mrb_bint_neg(mrb, v) : v;
-    mrb_gc_arena_restore(mrb, idx);
-    mrb_gc_protect(mrb, res);
-    return res;
+    uint8_t b[16];
+    for (int i = 15; i >= 0; i--) { b[i] = static_cast<uint8_t>(mag); mag >>= 8; }
+    return mrb_integer_from_bytes(mrb, b, sizeof b, neg ? -1 : (s == 0 ? 0 : 1));
   }
 #endif
 }

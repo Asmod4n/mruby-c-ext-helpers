@@ -33,6 +33,7 @@
 #include <mruby/presym.h>
 #include <mruby/string.h>
 #include <cassert>
+#include <limits>
 #include <string>
 #include <vector>
 #include <array>
@@ -357,6 +358,20 @@ static void test_edges(mrb_state* mrb) {
     auto under_sint = (__int128)MRB_INT_MIN - 1;
     v = mrb_convert_number(mrb, under_sint);
     assert(mrb_bigint_p(v));
+
+    // The value, not only the type: 2**100, its negative, and the two
+    // ends of the 128-bit range, read back as decimal.
+    auto says = [&](mrb_value x, const char* want) {
+      mrb_value s = mrb_integer_to_str(mrb, x, 10);
+      assert(std::string(RSTRING_PTR(s), RSTRING_LEN(s)) == want);
+    };
+    says(mrb_convert_number(mrb, (unsigned __int128)1 << 100), "1267650600228229401496703205376");
+    says(mrb_convert_number(mrb, -((__int128)1 << 100)), "-1267650600228229401496703205376");
+    says(mrb_convert_number(mrb, std::numeric_limits<unsigned __int128>::max()),
+         "340282366920938463463374607431768211455");
+    says(mrb_convert_number(mrb, std::numeric_limits<__int128>::min()),
+         "-170141183460469231731687303715884105728");
+    says(mrb_convert_number(mrb, (__int128)0), "0");
 #endif
   }
 }
