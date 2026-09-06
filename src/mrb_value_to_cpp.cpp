@@ -7,6 +7,19 @@
 #include <mruby/branch_pred.h>
 #include <mruby/numeric.h>
 
+/* mrb_raise does not return, but a strict -std= hides that: mruby's
+   common.h gives mrb_noreturn only for __GNUC__ && !__STRICT_ANSI__, and
+   -std=c++20 defines __STRICT_ANSI__. A function that ends at a raise then
+   warns "control reaches end of non-void function". This macro says what
+   mrb_noreturn could not. */
+#if defined(__GNUC__) || defined(__clang__)
+#define CEXT_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define CEXT_UNREACHABLE() __assume(0)
+#else
+#define CEXT_UNREACHABLE() do { } while (0)
+#endif
+
 MRB_API std::vector<std::any>
 mrb_array_to_vector(mrb_state* mrb, mrb_value ary)
 {
@@ -56,6 +69,7 @@ inline MapKey mrb_value_to_map_key(mrb_state* mrb, mrb_value val) {
         default:
             mrb_raise(mrb, E_TYPE_ERROR, "Unsupported or unhandled mrb_value type for map key");
     }
+    CEXT_UNREACHABLE();
 }
 
 MRB_API std::map<MapKey, std::any>
@@ -118,4 +132,5 @@ mrb_value_to_any(mrb_state* mrb, mrb_value val)
         default:
             mrb_raise(mrb, E_TYPE_ERROR, "Unsupported or unhandled mrb_value type");
     }
+    CEXT_UNREACHABLE();
 }
