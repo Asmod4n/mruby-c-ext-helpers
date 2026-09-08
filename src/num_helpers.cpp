@@ -17,18 +17,6 @@ namespace mrbcpp::number_converter {
     using mrb_int_limits = std::numeric_limits<mrb_int>;
     using T_limits       = std::numeric_limits<T>;
 
-#if defined(__SIZEOF_INT128__)
-    if constexpr (std::is_same_v<T, __int128>) {
-      // Signed 128: must be within mrb_int range
-      return (static_cast<__int128>(mrb_int_limits::min()) >= T_limits::min()) &&
-             (static_cast<__int128>(mrb_int_limits::max()) <= T_limits::max());
-    }
-    if constexpr (std::is_same_v<T, unsigned __int128>) {
-      // Unsigned 128: only upper bound matters
-      return static_cast<unsigned __int128>(mrb_int_limits::max()) >= T_limits::max();
-    }
-#endif
-
     if constexpr (std::is_signed_v<T>) {
       return T_limits::min() >= mrb_int_limits::min() &&
              T_limits::max() <= mrb_int_limits::max();
@@ -58,20 +46,8 @@ namespace mrbcpp::number_converter {
   }
 
   template <typename T>
-  struct is_extended_integral : std::is_integral<T> {};
-
-  #if defined(__SIZEOF_INT128__)
-  template <> struct is_extended_integral<__int128> : std::true_type {};
-  template <> struct is_extended_integral<unsigned __int128> : std::true_type {};
-  #endif
-
-  template <typename T>
-  inline constexpr bool is_extended_integral_v = is_extended_integral<T>::value;
-
-
-  template <typename T>
   static mrb_value mrb_convert_number_safe(mrb_state* mrb, T value) {
-    static_assert(is_extended_integral_v<T>, "Expected integral type");
+    static_assert(std::is_integral_v<T>, "Expected integral type");
     if constexpr (fits_in_mrb_int<T>()) {
       return mrb_convert_number(mrb, value);
     } else {
@@ -96,10 +72,6 @@ MRB_DEFINE_CONVERTER(int32_t, int32)
 MRB_DEFINE_CONVERTER(uint32_t, uint32)
 MRB_DEFINE_CONVERTER(int64_t, int64)
 MRB_DEFINE_CONVERTER(uint64_t, uint64)
-#if defined(__SIZEOF_INT128__)
-MRB_DEFINE_CONVERTER(__int128, int128)
-MRB_DEFINE_CONVERTER(unsigned __int128, uint128)
-#endif
 MRB_DEFINE_CONVERTER(short, short)
 MRB_DEFINE_CONVERTER(unsigned short, ushort)
 MRB_DEFINE_CONVERTER(int, int)
