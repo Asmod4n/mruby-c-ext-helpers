@@ -13,9 +13,6 @@
 #include <mruby.h>
 #include <mruby/numeric.h>
 #include <mruby/value.h>
-MRB_BEGIN_DECL
-#include <mruby/internal.h>
-MRB_END_DECL
 
 namespace mrbcpp::number_converter {
   template <typename T>
@@ -40,35 +37,6 @@ namespace mrbcpp::number_converter {
     }
   }
 
-#if defined(__SIZEOF_INT128__)
-  template <typename T> struct is_int128   : std::false_type {};
-  template <typename T> struct is_uint128  : std::false_type {};
-  template <> struct is_int128<__int128>             : std::true_type {};
-  template <> struct is_uint128<unsigned __int128>   : std::true_type {};
-#endif
-
-
-#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
-  // A 128-bit value as the sixteen bytes mrb_integer_from_bytes reads,
-  // most significant first. One call, and a Fixnum comes back where the
-  // value fits one.
-  static inline mrb_value mrb_bint_new_uint128(mrb_state* mrb, unsigned __int128 u) {
-    uint8_t b[16];
-    for (int i = 15; i >= 0; i--) { b[i] = static_cast<uint8_t>(u); u >>= 8; }
-    return mrb_integer_from_bytes(mrb, b, sizeof b, 1);
-  }
-
-  static inline mrb_value mrb_bint_new_int128(mrb_state* mrb, __int128 s) {
-    const bool neg = s < 0;
-    // Two's complement negation on the unsigned type: INT128_MIN has no
-    // positive twin as a signed value, and as unsigned it has.
-    unsigned __int128 mag = neg ? (0 - static_cast<unsigned __int128>(s))
-                                : static_cast<unsigned __int128>(s);
-    uint8_t b[16];
-    for (int i = 15; i >= 0; i--) { b[i] = static_cast<uint8_t>(mag); mag >>= 8; }
-    return mrb_integer_from_bytes(mrb, b, sizeof b, neg ? -1 : (s == 0 ? 0 : 1));
-  }
-#endif
 }
 
 template <typename T>
@@ -107,34 +75,7 @@ if constexpr ((std::numeric_limits<T>::lowest)() >= (std::numeric_limits<mrb_flo
   }
 
   // ------------------------------------------------------------
-  // 128‑BIT TYPES — MUST COME BEFORE std::is_integral_v<T>
-  // ------------------------------------------------------------
-#if defined(__SIZEOF_INT128__)
-  else if constexpr (is_int128<T>::value) {
-    if (value >= static_cast<T>(MRB_INT_MIN) && value <= static_cast<T>(MRB_INT_MAX)) {
-      return mrb_int_value(mrb, static_cast<mrb_int>(value));
-    }
-#ifdef MRB_USE_BIGINT
-    return mrb_bint_new_int128(mrb, static_cast<__int128>(value));
-#else
-    mrb_raise(mrb, E_RANGE_ERROR, "__int128 too large and BigInt disabled");
-#endif
-  }
-
-  else if constexpr (is_uint128<T>::value) {
-    if (value <= static_cast<T>(MRB_INT_MAX)) {
-      return mrb_int_value(mrb, static_cast<mrb_int>(value));
-    }
-#ifdef MRB_USE_BIGINT
-    return mrb_bint_new_uint128(mrb, static_cast<unsigned __int128>(value));
-#else
-    mrb_raise(mrb, E_RANGE_ERROR, "unsigned __int128 too large and BigInt disabled");
-#endif
-  }
-#endif // __SIZEOF_INT128__
-
-  // ------------------------------------------------------------
-  // INTEGRAL TYPES (after 128‑bit handling!)
+  // INTEGRAL TYPES
   // ------------------------------------------------------------
   else if constexpr (std::is_integral_v<T>) {
 
@@ -153,15 +94,7 @@ if constexpr ((std::numeric_limits<T>::lowest)() >= (std::numeric_limits<mrb_flo
       if (value >= MRB_INT_MIN && value <= MRB_INT_MAX) {
         return mrb_int_value(mrb, static_cast<mrb_int>(value));
       }
-#ifdef MRB_USE_BIGINT
-# ifdef MRB_INT64
-      return mrb_bint_new_int(mrb, static_cast<mrb_int>(value));
-# else
-      return mrb_bint_new_int64(mrb, static_cast<int64_t>(value));
-# endif
-#else
-      mrb_raise(mrb, E_RANGE_ERROR, "Signed integer too large for mrb_int and BigInt disabled");
-#endif
+      return mrb_int64_value(mrb, static_cast<int64_t>(value));
     }
 
     // Unsigned overflow
@@ -169,11 +102,7 @@ if constexpr ((std::numeric_limits<T>::lowest)() >= (std::numeric_limits<mrb_flo
       if (value <= static_cast<std::make_unsigned_t<mrb_int>>(MRB_INT_MAX)) {
         return mrb_int_value(mrb, static_cast<mrb_int>(value));
       }
-#ifdef MRB_USE_BIGINT
-      return mrb_bint_new_uint64(mrb, static_cast<uint64_t>(value));
-#else
-      mrb_raise(mrb, E_RANGE_ERROR, "Unsigned integer too large for mrb_int and BigInt disabled");
-#endif
+      return mrb_uint64_value(mrb, static_cast<uint64_t>(value));
     }
   }
 

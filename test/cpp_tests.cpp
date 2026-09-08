@@ -285,18 +285,19 @@ static void test_edges(mrb_state* mrb) {
     assert(mrb_fixnum_p(v));
     assert(mrb_fixnum(v) == MRB_FIXNUM_MAX);
 
-#if defined(__SIZEOF_INT128__)
-    // Just outside fixnum range
-    auto over_fix = (__int128)MRB_FIXNUM_MAX + 1;
-    v = mrb_convert_number(mrb, over_fix);
-    assert(mrb_integer_p(v));
-    assert(mrb_integer(v) == over_fix);
+    // Just outside fixnum range. Where the build boxes a value, an
+    // mrb_int is wider than a fixnum and holds these two.
+    if constexpr (MRB_FIXNUM_MAX < MRB_INT_MAX) {
+      auto over_fix = static_cast<int64_t>(MRB_FIXNUM_MAX) + 1;
+      v = mrb_convert_number(mrb, over_fix);
+      assert(mrb_integer_p(v));
+      assert(mrb_integer(v) == over_fix);
 
-    auto under_fix = (__int128)MRB_FIXNUM_MIN - 1;
-    v = mrb_convert_number(mrb, under_fix);
-    assert(mrb_integer_p(v));
-    assert(mrb_integer(v) == under_fix);
-#endif
+      auto under_fix = static_cast<int64_t>(MRB_FIXNUM_MIN) - 1;
+      v = mrb_convert_number(mrb, under_fix);
+      assert(mrb_integer_p(v));
+      assert(mrb_integer(v) == under_fix);
+    }
   }
 
   // --- mrb_int boundaries ---
@@ -309,13 +310,11 @@ static void test_edges(mrb_state* mrb) {
     assert(mrb_integer_p(v));
     assert(mrb_integer(v) == MRB_INT_MAX);
 
-#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
-    auto over_int = (__int128)MRB_INT_MAX + 1;
+#ifdef MRB_USE_BIGINT
+    // Above mrb_int there is only the unsigned side to come from: a
+    // signed C type that reaches past MRB_INT_MAX does not exist here.
+    auto over_int = static_cast<uint64_t>(MRB_INT_MAX) + 1;
     v = mrb_convert_number(mrb, over_int);
-    assert(mrb_bigint_p(v));
-
-    auto under_int = (__int128)MRB_INT_MIN - 1;
-    v = mrb_convert_number(mrb, under_int);
     assert(mrb_bigint_p(v));
 #endif
   }
@@ -330,8 +329,8 @@ static void test_edges(mrb_state* mrb) {
     assert(mrb_integer_p(v));
     assert(mrb_integer(v) == MRB_INT_MAX);
 
-#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
-    auto over_uint = static_cast<uint64_t>((__int128)MRB_INT_MAX + 1);
+#ifdef MRB_USE_BIGINT
+    auto over_uint = static_cast<uint64_t>(MRB_INT_MAX) + 1;
     v = mrb_convert_number(mrb, over_uint);
     assert(mrb_bigint_p(v));
 
@@ -350,28 +349,19 @@ static void test_edges(mrb_state* mrb) {
     assert(mrb_integer_p(v));
     assert(mrb_integer(v) == MRB_INT_MAX);
 
-#if defined(__SIZEOF_INT128__) && defined(MRB_USE_BIGINT)
-    auto over_sint = (__int128)MRB_INT_MAX + 1;
-    v = mrb_convert_number(mrb, over_sint);
-    assert(mrb_bigint_p(v));
-
-    auto under_sint = (__int128)MRB_INT_MIN - 1;
-    v = mrb_convert_number(mrb, under_sint);
-    assert(mrb_bigint_p(v));
-
-    // The value, not only the type: 2**100, its negative, and the two
-    // ends of the 128-bit range, read back as decimal.
+#ifdef MRB_USE_BIGINT
+    // The value, not only the type: the two ends that reach past
+    // mrb_int, read back as decimal.
     auto says = [&](mrb_value x, const char* want) {
       mrb_value s = mrb_integer_to_str(mrb, x, 10);
       assert(std::string(RSTRING_PTR(s), RSTRING_LEN(s)) == want);
     };
-    says(mrb_convert_number(mrb, (unsigned __int128)1 << 100), "1267650600228229401496703205376");
-    says(mrb_convert_number(mrb, -((__int128)1 << 100)), "-1267650600228229401496703205376");
-    says(mrb_convert_number(mrb, std::numeric_limits<unsigned __int128>::max()),
-         "340282366920938463463374607431768211455");
-    says(mrb_convert_number(mrb, std::numeric_limits<__int128>::min()),
-         "-170141183460469231731687303715884105728");
-    says(mrb_convert_number(mrb, (__int128)0), "0");
+    says(mrb_convert_number(mrb, std::numeric_limits<uint64_t>::max()),
+         "18446744073709551615");
+    says(mrb_convert_number(mrb, static_cast<uint64_t>(MRB_INT_MAX) + 1),
+         "9223372036854775808");
+    says(mrb_convert_number(mrb, int64_t{MRB_INT_MIN}), "-9223372036854775808");
+    says(mrb_convert_number(mrb, uint64_t{0}), "0");
 #endif
   }
 }

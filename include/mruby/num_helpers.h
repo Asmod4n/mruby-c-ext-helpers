@@ -21,10 +21,6 @@ MRB_API mrb_value mrb_convert_uint32(mrb_state* mrb, uint32_t value);
 
 MRB_API mrb_value mrb_convert_int64(mrb_state* mrb, int64_t value);
 MRB_API mrb_value mrb_convert_uint64(mrb_state* mrb, uint64_t value);
-#if defined(__SIZEOF_INT128__)
-MRB_API mrb_value mrb_convert_int128(mrb_state* mrb, __int128 value);
-MRB_API mrb_value mrb_convert_uint128(mrb_state* mrb, unsigned __int128 value);
-#endif
 
 MRB_API mrb_value mrb_convert_float(mrb_state* mrb, float value);
 MRB_API mrb_value mrb_convert_double(mrb_state* mrb, double value);
