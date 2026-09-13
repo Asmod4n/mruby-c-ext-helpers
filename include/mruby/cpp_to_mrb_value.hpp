@@ -82,8 +82,7 @@ namespace mrbcpp::value_converter {
         return mrb_nil_value();
       } else if constexpr (is_map_like_v<T>) {
         mrb_value hash = mrb_hash_new(mrb);
-        mrb_gc_protect(mrb, hash);
-        int arena_index = mrb_gc_arena_save(mrb);
+        const int arena_index = mrb_gc_arena_save(mrb);
         for (const auto& [k, v] : val) {
           mrb_hash_set(mrb, hash,
             cpp_to_mrb_value(mrb, k),
@@ -98,8 +97,7 @@ namespace mrbcpp::value_converter {
         }
 
         mrb_value ruby_set = mrb_obj_new(mrb, set_class, 0, nullptr);
-        mrb_gc_protect(mrb, ruby_set);
-        int arena_index = mrb_gc_arena_save(mrb);
+        const int arena_index = mrb_gc_arena_save(mrb);
         for (const auto& item : val) {
           mrb_funcall_id(mrb, ruby_set, MRB_SYM(add), 1, cpp_to_mrb_value(mrb, item));
           mrb_gc_arena_restore(mrb, arena_index);
@@ -107,8 +105,7 @@ namespace mrbcpp::value_converter {
         return ruby_set;
       } else if constexpr (is_iterable_v<T>) {
         mrb_value ary = mrb_ary_new_capa(mrb, static_cast<mrb_int>(std::size(val)));
-        mrb_gc_protect(mrb, ary);
-        int arena_index = mrb_gc_arena_save(mrb);
+        const int arena_index = mrb_gc_arena_save(mrb);
         for (const auto& item : val) {
           mrb_ary_push(mrb, ary, cpp_to_mrb_value(mrb, item));
           mrb_gc_arena_restore(mrb, arena_index);
@@ -121,18 +118,19 @@ namespace mrbcpp::value_converter {
         time_t time = system_clock::to_time_t(sys_tp);
         auto duration = sys_tp.time_since_epoch();
         auto micros = duration_cast<microseconds>(duration).count() % 1000000;
-
+        const int arena_index = mrb_gc_arena_save(mrb);
         mrb_value sec = mrb_convert_number(mrb, time);
-        mrb_gc_protect(mrb, sec);
         mrb_value usec = mrb_convert_number(mrb, micros);
-        mrb_gc_protect(mrb, usec);
 
         struct RClass* time_class = mrb_class_get_id(mrb, MRB_SYM(Time));
         if (unlikely(!time_class)) {
           mrb_raise(mrb, E_NAME_ERROR, "Time class not defined — is it included in your mruby build?");
         }
 
-        return mrb_funcall_id(mrb, mrb_obj_value(time_class), MRB_SYM(at), 2, sec, usec);
+        mrb_value time_at = mrb_funcall_id(mrb, mrb_obj_value(time_class), MRB_SYM(at), 2, sec, usec);
+        mrb_gc_arena_restore(mrb, arena_index);
+        mrb_gc_protect(mrb, time_at);
+        return time_at;
       } else {
         static_assert(sizeof(T) == 0, "Type not supported by mrb_converter");
       }
@@ -143,7 +141,5 @@ namespace mrbcpp::value_converter {
 
 template <typename T>
 constexpr MRB_API mrb_value cpp_to_mrb_value(mrb_state* mrb, T&& val) {
-  mrb_value mruby_val = mrbcpp::value_converter::mrb_converter<std::decay_t<T>>::convert(mrb, std::forward<T>(val));
-  mrb_gc_protect(mrb, mruby_val);
-  return mruby_val;
+  return mrbcpp::value_converter::mrb_converter<std::decay_t<T>>::convert(mrb, std::forward<T>(val));
 }
