@@ -132,6 +132,77 @@ assert("to_mrb_time is a Ruby Time") do
   assert_true(CExtHelpersVectors.to_mrb_time.kind_of?(Time))
 end
 
+# --- mrb_value_to<T>: a Ruby value read as a C++ type, sent back so the
+# test can compare it. Each type has one probe; the wrong Ruby type raises,
+# because mruby's own conversion raises, and a fixed size is checked.
+
+assert("mrb_value_to<mrb_int>") do
+  assert_equal(42, CExtHelpersVectors.from_mrb_int(42))
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_int("42") }
+end
+
+assert("mrb_value_to<double>") do
+  assert_equal(1.5, CExtHelpersVectors.from_mrb_float(1.5))
+  assert_equal(2.0, CExtHelpersVectors.from_mrb_float(2))
+end
+
+assert("mrb_value_to<bool> is truthiness") do
+  assert_true(CExtHelpersVectors.from_mrb_bool(1))
+  assert_false(CExtHelpersVectors.from_mrb_bool(nil))
+  assert_false(CExtHelpersVectors.from_mrb_bool(false))
+end
+
+assert("mrb_value_to<std::string> and <std::string_view>") do
+  assert_equal("ab\0c", CExtHelpersVectors.from_mrb_string("ab\0c"))
+  assert_equal("view", CExtHelpersVectors.from_mrb_string_view("view"))
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_string(1) }
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_string(:sym) }
+end
+
+assert("mrb_value_to<std::optional<mrb_int>>: nil is nullopt") do
+  assert_nil(CExtHelpersVectors.from_mrb_optional_int(nil))
+  assert_equal(7, CExtHelpersVectors.from_mrb_optional_int(7))
+end
+
+assert("mrb_value_to<std::pair>: an Array of two") do
+  assert_equal(["k", 1], CExtHelpersVectors.from_mrb_pair(["k", 1]))
+  assert_raise(ArgumentError) { CExtHelpersVectors.from_mrb_pair(["k"]) }
+  assert_raise(ArgumentError) { CExtHelpersVectors.from_mrb_pair(["k", 1, 2]) }
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_pair("k") }
+end
+
+assert("mrb_value_to<std::array<mrb_int, 3>>: the size is checked") do
+  assert_equal(123, CExtHelpersVectors.from_mrb_array3([1, 2, 3]))
+  assert_raise(ArgumentError) { CExtHelpersVectors.from_mrb_array3([1, 2]) }
+  assert_raise(ArgumentError) { CExtHelpersVectors.from_mrb_array3([1, 2, 3, 4]) }
+end
+
+assert("mrb_value_to<std::vector<mrb_int>>") do
+  assert_equal([3, 1, 2], CExtHelpersVectors.from_mrb_vector_int([3, 1, 2]))
+  assert_equal([], CExtHelpersVectors.from_mrb_vector_int([]))
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_vector_int([1, "2"]) }
+end
+
+assert("mrb_value_to<std::map<std::string, mrb_int>>") do
+  assert_equal({"a" => 1, "b" => 2}, CExtHelpersVectors.from_mrb_map({"a" => 1, "b" => 2}))
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_map([["a", 1]]) }
+end
+
+assert("mrb_value_to<std::set<mrb_int>>: from an Array or anything with to_a") do
+  assert_equal(Set[1, 2], CExtHelpersVectors.from_mrb_set([2, 1, 2]))
+  assert_equal(Set[5], CExtHelpersVectors.from_mrb_set(Set[5]))
+end
+
+assert("mrb_value_to<time_point>: a Time round trip at second precision") do
+  t = Time.at(1700000000)
+  assert_equal(t.to_i, CExtHelpersVectors.from_mrb_time(t).to_i)
+end
+
+assert("mrb_value_to<T> for a data type reads the object") do
+  assert_equal(30, CExtHelpersVectors.from_mrb_data(TestThingHolder.new))
+  assert_raise(TypeError) { CExtHelpersVectors.from_mrb_data(1) }
+end
+
 # --- Pure C++/C-API checks with no Ruby-observable output beyond
 # "it ran to completion": numeric edge cases, the MRB_CPP_DEFINE_TYPE
 # subclassing contract, and the mrb_cpp_new/mrb_cpp_get round trip.

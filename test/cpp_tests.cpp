@@ -422,9 +422,150 @@ cpp_data_roundtrip_ok_q(mrb_state* mrb, mrb_value self)
   return mrb_true_value();
 }
 
+
+// -------------------------------------------------------------
+// mrb_value_to<T> probes: a Ruby value in, the C++ value it makes,
+// sent back through cpp_to_mrb_value or built by hand where the
+// type has no form in that direction, so test.rb can compare it.
+// -------------------------------------------------------------
+
+static mrb_value
+from_mrb_int(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return mrb_int_value(mrb, mrb_value_to<mrb_int>(mrb, v));
+}
+
+static mrb_value
+from_mrb_float(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return mrb_float_value(mrb, mrb_value_to<double>(mrb, v));
+}
+
+static mrb_value
+from_mrb_bool(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return mrb_bool_value(mrb_value_to<bool>(mrb, v));
+}
+
+static mrb_value
+from_mrb_string(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_value_to<std::string>(mrb, v));
+}
+
+static mrb_value
+from_mrb_string_view(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  const std::string_view sv = mrb_value_to<std::string_view>(mrb, v);
+  return mrb_str_new(mrb, sv.data(), sv.size());
+}
+
+static mrb_value
+from_mrb_optional_int(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  const std::optional<mrb_int> o = mrb_value_to<std::optional<mrb_int>>(mrb, v);
+  return o ? mrb_int_value(mrb, *o) : mrb_nil_value();
+}
+
+static mrb_value
+from_mrb_pair(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  const auto p = mrb_value_to<std::pair<std::string, mrb_int>>(mrb, v);
+  mrb_value ary = mrb_ary_new_capa(mrb, 2);
+  mrb_ary_push(mrb, ary, cpp_to_mrb_value(mrb, p.first));
+  mrb_ary_push(mrb, ary, mrb_int_value(mrb, p.second));
+  return ary;
+}
+
+static mrb_value
+from_mrb_array3(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  const auto a = mrb_value_to<std::array<mrb_int, 3>>(mrb, v);
+  return mrb_int_value(mrb, a[0] * 100 + a[1] * 10 + a[2]);
+}
+
+static mrb_value
+from_mrb_vector_int(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_value_to<std::vector<mrb_int>>(mrb, v));
+}
+
+static mrb_value
+from_mrb_map(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_value_to<std::map<std::string, mrb_int>>(mrb, v));
+}
+
+static mrb_value
+from_mrb_set(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_value_to<std::set<mrb_int>>(mrb, v));
+}
+
+static mrb_value
+from_mrb_time(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_value_to<std::chrono::system_clock::time_point>(mrb, v));
+}
+
+static mrb_value
+from_mrb_data(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  const TestThing t = mrb_value_to<TestThing>(mrb, v);
+  return mrb_int_value(mrb, t.x + t.y);
+}
+
 MRB_BEGIN_DECL
 void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
   struct RClass* m = mrb_define_module(mrb, "CExtHelpersVectors");
+
+  mrb_define_module_function(mrb, m, "from_mrb_int", from_mrb_int, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_float", from_mrb_float, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_bool", from_mrb_bool, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_string", from_mrb_string, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_string_view", from_mrb_string_view, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_optional_int", from_mrb_optional_int, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_pair", from_mrb_pair, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_array3", from_mrb_array3, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_vector_int", from_mrb_vector_int, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_map", from_mrb_map, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_set", from_mrb_set, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_time", from_mrb_time, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "from_mrb_data", from_mrb_data, MRB_ARGS_REQ(1));
+  struct RClass* holder = mrb_define_class(mrb, "TestThingHolder", mrb->object_class);
+  MRB_SET_INSTANCE_TT(holder, MRB_TT_DATA);
+  mrb_define_method(mrb, holder, "initialize",
+      [](mrb_state* mrb, mrb_value self) -> mrb_value {
+        mrb_cpp_new<TestThing>(mrb, self, 10, 20);
+        return self;
+      },
+      MRB_ARGS_NONE());
 
   mrb_define_module_function(mrb, m, "any_roundtrip", any_roundtrip, MRB_ARGS_REQ(1));
 
