@@ -1,4 +1,5 @@
 MRuby::Gem::Specification.new('mruby-c-ext-helpers') do |spec|
+  spec.export_include_paths << "#{spec.dir}/include" if spec.respond_to?(:export_include_paths)
   spec.license = 'MPL-2'
   spec.authors = 'Hendrik Beskow'
   spec.version = "0.3.0"
