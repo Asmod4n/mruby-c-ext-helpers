@@ -1,3 +1,4 @@
+#include <stdexcept>
 /*
  * Test-only Ruby surface over this gem's C++ conversion helpers,
  * compiled into mrbtest and nothing else (mruby builds test/* of a gem
@@ -423,6 +424,62 @@ cpp_data_roundtrip_ok_q(mrb_state* mrb, mrb_value self)
 }
 
 
+
+// -------------------------------------------------------------
+// mrb_cpp_new and mrb_cpp_delete free each object exactly once.
+// These run under ASan, which reports a double free, a leak or a
+// free of a wrong address.
+// -------------------------------------------------------------
+
+struct ThrowingThing {
+  ThrowingThing() { throw std::runtime_error("constructor fails"); }
+};
+
+MRB_CPP_DEFINE_TYPE(ThrowingThing, throwingthing)
+
+// A constructor that throws must leave the object without data and
+// without a type, so that the collector never calls dfree for it.
+static mrb_value
+throwing_constructor_leaves_no_data(mrb_state* mrb, mrb_value self)
+{
+  struct RClass* cls = mrb_class_get(mrb, "ThrowingThingHolder");
+  mrb_value obj = mrb_obj_value(mrb_data_object_alloc(mrb, cls, nullptr, nullptr));
+  bool thrown = false;
+  try {
+    mrb_cpp_new<ThrowingThing>(mrb, obj);
+  } catch (const std::runtime_error&) {
+    thrown = true;
+  }
+  return mrb_bool_value(thrown && DATA_PTR(obj) == nullptr && DATA_TYPE(obj) == nullptr);
+}
+
+struct Mixin {
+  int m = 7;
+  virtual ~Mixin() = default;
+};
+
+struct PolyBase {
+  int v;
+  explicit PolyBase(int x) : v(x) {}
+  virtual ~PolyBase() = default;
+};
+
+// PolyBase is the second base, so a PolyBase* does not point at the
+// start of the allocation.
+struct MultiDerived : Mixin, PolyBase {
+  explicit MultiDerived(int x) : PolyBase(x) {}
+};
+
+MRB_CPP_DEFINE_TYPE(PolyBase, polybase)
+
+static mrb_value
+multi_derived_value(mrb_state* mrb, mrb_value self)
+{
+  mrb_value obj;
+  mrb_get_args(mrb, "o", &obj);
+  return mrb_int_value(mrb, mrb_cpp_get<PolyBase>(mrb, obj)->v);
+}
+
 // -------------------------------------------------------------
 // mrb_value_to<T> probes: a Ruby value in, the C++ value it makes,
 // sent back through cpp_to_mrb_value or built by hand where the
@@ -566,6 +623,19 @@ void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
         return self;
       },
       MRB_ARGS_NONE());
+
+  struct RClass* throwing_holder = mrb_define_class(mrb, "ThrowingThingHolder", mrb->object_class);
+  MRB_SET_INSTANCE_TT(throwing_holder, MRB_TT_DATA);
+  mrb_define_module_function(mrb, m, "throwing_constructor_leaves_no_data", throwing_constructor_leaves_no_data, MRB_ARGS_NONE());
+  struct RClass* multi_holder = mrb_define_class(mrb, "MultiDerivedHolder", mrb->object_class);
+  MRB_SET_INSTANCE_TT(multi_holder, MRB_TT_DATA);
+  mrb_define_method(mrb, multi_holder, "initialize",
+      [](mrb_state* mrb, mrb_value self) -> mrb_value {
+        mrb_cpp_new<MultiDerived>(mrb, self, 42);
+        return self;
+      },
+      MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "multi_derived_value", multi_derived_value, MRB_ARGS_REQ(1));
 
   mrb_define_module_function(mrb, m, "any_roundtrip", any_roundtrip, MRB_ARGS_REQ(1));
 

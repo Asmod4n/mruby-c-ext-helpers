@@ -227,3 +227,26 @@ assert("mrb_cpp_new refuses a second initialize") do
   assert_raise(TypeError) { holder.__send__(:initialize) }
   assert_equal(30, CExtHelpersVectors.from_mrb_data(holder))
 end
+
+# The memory of a failed constructor is freed by mrb_cpp_new, and the
+# object gets no data type, so dfree does not free it a second time.
+assert("mrb_cpp_new frees the memory once when the constructor throws") do
+  assert_true(CExtHelpersVectors.throwing_constructor_leaves_no_data)
+  GC.start
+end
+
+# Every object is freed by its dfree once. ASan reports a second free.
+assert("mrb_cpp_new objects are freed once by the collector") do
+  100.times { TestThingHolder.new }
+  GC.start
+end
+
+# A class with two polymorphic bases, registered through its second
+# base. Reading and freeing must use the address of that base, and
+# the free must reach the start of the allocation.
+assert("MRB_CPP_DEFINE_TYPE frees a subclass with two bases once") do
+  holder = MultiDerivedHolder.new
+  assert_equal(42, CExtHelpersVectors.multi_derived_value(holder))
+  holder = nil
+  GC.start
+end
