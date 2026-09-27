@@ -23,6 +23,8 @@ MRB_API std::map<MapKey, std::any> mrb_hash_to_map(mrb_state* mrb, mrb_value has
 #include <mruby/error.h>
 #include <array>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string_view>
@@ -53,9 +55,15 @@ namespace mrbcpp::value_converter {
       } else if constexpr (std::is_same_v<T, bool>) {
         return mrb_test(v);
       } else if constexpr (std::is_integral_v<T>) {
-        return static_cast<T>(mrb_as_int(mrb, v));
+        const mrb_int n = mrb_as_int(mrb, v);
+        if ((std::is_unsigned_v<T> && n < 0) || static_cast<mrb_int>(static_cast<T>(n)) != n) [[unlikely]] mrb_raisef(mrb, E_RANGE_ERROR, "integer %i does not fit", n);
+        return static_cast<T>(n);
       } else if constexpr (std::is_floating_point_v<T>) {
-        return static_cast<T>(mrb_as_float(mrb, v));
+        const mrb_float f = mrb_as_float(mrb, v);
+        if constexpr (sizeof(T) < sizeof(mrb_float)) {
+          if (std::isfinite(f) && std::abs(f) > std::numeric_limits<T>::max()) [[unlikely]] mrb_raisef(mrb, E_RANGE_ERROR, "float %f does not fit", f);
+        }
+        return static_cast<T>(f);
       } else if constexpr (std::is_same_v<T, std::string>) {
         mrb_value s = mrb_ensure_string_type(mrb, v);
         return std::string(RSTRING_PTR(s), static_cast<std::size_t>(RSTRING_LEN(s)));
