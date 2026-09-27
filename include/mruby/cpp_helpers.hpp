@@ -1,6 +1,7 @@
 #pragma once
 #include <mruby.h>
 #include <mruby/data.h>
+#include <memory>
 #include <new>
 #include "branch_pred.h"
 #include <type_traits>
@@ -12,10 +13,15 @@ struct mrb_data_type_traits;
 
 template <typename T, typename... Args>
 T* mrb_cpp_new(mrb_state* mrb, mrb_value self, Args&&... args) {
+  if (unlikely(DATA_PTR(self) != nullptr))
+    mrb_raisef(mrb, E_TYPE_ERROR, "already initialized %C", mrb_obj_class(mrb, self));
   const mrb_data_type* dt = mrb_data_type_traits<T>::get();
-  T* mem = static_cast<T*>(mrb_malloc(mrb, sizeof(T)));
-  mrb_data_init(self, mem, dt);
-  return new (mem) T(std::forward<Args>(args)...);
+  auto free_memory = [mrb](void* p) { mrb_free(mrb, p); };
+  std::unique_ptr<void, decltype(free_memory)> memory{mrb_malloc(mrb, sizeof(T)), free_memory};
+  T* obj = std::construct_at(static_cast<T*>(memory.get()), std::forward<Args>(args)...);
+  memory.release();
+  mrb_data_init(self, obj, dt);
+  return obj;
 }
 
 template <typename T>

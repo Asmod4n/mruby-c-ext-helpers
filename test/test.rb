@@ -218,3 +218,12 @@ end
 assert("cpp_data_roundtrip_ok? -- mrb_cpp_new / mrb_cpp_get round trip") do
   assert_true(CExtHelpersVectors.cpp_data_roundtrip_ok?)
 end
+
+# initialize can be called again from Ruby. A second call must not
+# replace the C++ object, because the first one would leak and never
+# be destroyed.
+assert("mrb_cpp_new refuses a second initialize") do
+  holder = TestThingHolder.new
+  assert_raise(TypeError) { holder.__send__(:initialize) }
+  assert_equal(30, CExtHelpersVectors.from_mrb_data(holder))
+end
