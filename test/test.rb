@@ -159,6 +159,13 @@ assert("mrb_value_to<std::string> and <std::string_view>") do
   assert_raise(TypeError) { CExtHelpersVectors.from_mrb_string(:sym) }
 end
 
+assert("to_mrb_optional: the value, or nil for an empty optional") do
+  assert_equal(7, CExtHelpersVectors.to_mrb_optional_int(7))
+  assert_nil(CExtHelpersVectors.to_mrb_optional_int(nil))
+  assert_equal("foo", CExtHelpersVectors.to_mrb_optional_string(true))
+  assert_nil(CExtHelpersVectors.to_mrb_optional_string(nil))
+end
+
 assert("mrb_value_to<std::optional<mrb_int>>: nil is nullopt") do
   assert_nil(CExtHelpersVectors.from_mrb_optional_int(nil))
   assert_equal(7, CExtHelpersVectors.from_mrb_optional_int(7))

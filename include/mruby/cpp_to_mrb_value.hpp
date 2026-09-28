@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <optional>
 #include <map>
 #include <unordered_map>
 #include <set>
@@ -50,6 +51,15 @@ namespace mrbcpp::value_converter {
   template <typename T>
   constexpr bool is_set_like_v = is_set_like<T>::value;
 
+  template <typename T>
+  struct is_optional : std::false_type {};
+
+  template <typename Val>
+  struct is_optional<std::optional<Val>> : std::true_type {};
+
+  template <typename T>
+  constexpr bool is_optional_v = is_optional<T>::value;
+
   template <typename Clock, typename Duration>
   std::chrono::system_clock::time_point to_system_time(std::chrono::time_point<Clock, Duration> tp) {
     return std::chrono::system_clock::time_point(
@@ -80,6 +90,8 @@ namespace mrbcpp::value_converter {
         return mrb_str_new_cstr(mrb, val);
       } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
         return mrb_nil_value();
+      } else if constexpr (is_optional_v<T>) {
+        return val ? cpp_to_mrb_value(mrb, *val) : mrb_nil_value();
       } else if constexpr (is_map_like_v<T>) {
         mrb_value hash = mrb_hash_new(mrb);
         const int arena_index = mrb_gc_arena_save(mrb);

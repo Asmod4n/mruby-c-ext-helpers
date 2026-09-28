@@ -167,6 +167,24 @@ to_mrb_nullptr(mrb_state* mrb, mrb_value self)
   return cpp_to_mrb_value(mrb, nullptr);
 }
 
+// std::optional is a range in C++26, and a range becomes an Array. An
+// optional is its value or nil instead, as nil becomes an empty optional.
+static mrb_value
+to_mrb_optional_int(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_nil_p(v) ? std::optional<int>() : std::optional<int>(static_cast<int>(mrb_integer(v))));
+}
+
+static mrb_value
+to_mrb_optional_string(mrb_state* mrb, mrb_value self)
+{
+  mrb_value v;
+  mrb_get_args(mrb, "o", &v);
+  return cpp_to_mrb_value(mrb, mrb_nil_p(v) ? std::optional<std::string>() : std::optional<std::string>("foo"));
+}
+
 static mrb_value
 to_mrb_map(mrb_state* mrb, mrb_value self)
 {
@@ -645,6 +663,8 @@ void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
   mrb_define_module_function(mrb, m, "to_mrb_std_string", to_mrb_std_string, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, m, "to_mrb_string_view", to_mrb_string_view, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, m, "to_mrb_cstr", to_mrb_cstr, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "to_mrb_optional_int", to_mrb_optional_int, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, m, "to_mrb_optional_string", to_mrb_optional_string, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, m, "to_mrb_nullptr", to_mrb_nullptr, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, m, "to_mrb_map", to_mrb_map, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, m, "to_mrb_unordered_map", to_mrb_unordered_map, MRB_ARGS_NONE());
