@@ -1,8 +1,8 @@
 #include <stdexcept>
 /*
  * Test-only Ruby surface over this gem's C++ conversion helpers,
- * compiled into mrbtest and nothing else (mruby builds test/* of a gem
- * only for its test binary). Values that used to be parsed from Ruby
+ * compiled into mrbtest and nothing else (mruby builds the test
+ * directory of a gem only for its test binary). Values that used to be parsed from Ruby
  * source at runtime are now either literals in test/test.rb (compiled
  * ahead of time by the build's mrbc) or built directly through the
  * mruby C API below -- neither path touches the compiler, so this gem
@@ -103,6 +103,7 @@ any_to_mrb(mrb_state* mrb, const std::any& a)
     return h;
   }
   mrb_raise(mrb, E_TYPE_ERROR, "any_to_mrb: unhandled std::any content");
+  return mrb_nil_value();
 }
 
 static mrb_value
