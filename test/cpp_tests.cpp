@@ -1,25 +1,10 @@
 #include <stdexcept>
 /*
- * Test-only Ruby surface over this gem's C++ conversion helpers,
- * compiled into mrbtest and nothing else (mruby builds test/* of a gem
- * only for its test binary). Values that used to be parsed from Ruby
- * source at runtime are now either literals in test/test.rb (compiled
- * ahead of time by the build's mrbc) or built directly through the
- * mruby C API below -- neither path touches the compiler, so this gem
- * needs no mruby-compiler test dependency to reach full coverage.
+ * Test-only Ruby surface over this gem's C++ helpers, compiled into
+ * mrbtest and nothing else. The conversion between C++ values and
+ * mruby values moved to mruby-cpp, and its tests went with it.
  *
- * Two directions get their own probes:
- *   CExtHelpersVectors.any_roundtrip(val)
- *     -> mrb_value_to_any(val), then converts the resulting std::any
- *        back to an mrb_value so test.rb can assert_equal against the
- *        original. Exercises mrb_value_to_any / mrb_array_to_vector /
- *        mrb_hash_to_map, including the MRB_TT_STRUCT and MRB_TT_SET
- *        branches.
- *   CExtHelpersVectors.to_mrb_*
- *     -> each wraps one cpp_to_mrb_value<T> instantiation with a fixed
- *        C++-side input and returns the mrb_value it produced.
- *
- * The remaining checks (numeric edge cases, the MRB_CPP_DEFINE_TYPE
+ * The checks here (numeric edge cases, the MRB_CPP_DEFINE_TYPE
  * subclassing contract, the mrb_cpp_new/mrb_cpp_get round trip) are
  * pure C++/C-API exercises with nothing Ruby-observable to assert on
  * beyond "it ran to completion" -- they keep their original cassert
@@ -42,196 +27,9 @@
 #include <unordered_map>
 #include <set>
 #include <unordered_set>
-#include <chrono>
-#include <any>
-#include <mruby/cpp_to_mrb_value.hpp>
-#include <mruby/mrb_value_to_cpp.hpp>
 #include <mruby/cpp_helpers.hpp>
-
-// -------------------------------------------------------------
-// std::any -> mrb_value, the mirror of mrb_value_to_any, so a Ruby
-// value can be sent through the library's conversion and compared to
-// itself on the other side without a runtime compiler in between.
-// -------------------------------------------------------------
-
-static mrb_value any_to_mrb(mrb_state* mrb, const std::any& a);
-
-static mrb_value
-map_key_to_mrb(mrb_state* mrb, const MapKey& k)
-{
-  if (auto p = std::get_if<mrb_int>(&k)) return mrb_int_value(mrb, *p);
-#ifndef MRB_NO_FLOAT
-  if (auto p = std::get_if<mrb_float>(&k)) return mrb_float_value(mrb, *p);
-#endif
-  const auto& s = std::get<std::string>(k);
-  return mrb_str_new(mrb, s.data(), s.size());
-}
-
-static mrb_value
-any_to_mrb(mrb_state* mrb, const std::any& a)
-{
-  if (!a.has_value()) return mrb_nil_value();
-  if (a.type() == typeid(bool)) return mrb_bool_value(std::any_cast<bool>(a));
-  if (a.type() == typeid(mrb_int)) return mrb_int_value(mrb, std::any_cast<mrb_int>(a));
-#ifndef MRB_NO_FLOAT
-  if (a.type() == typeid(mrb_float)) return mrb_float_value(mrb, std::any_cast<mrb_float>(a));
-#endif
-  if (a.type() == typeid(std::string)) {
-    const auto& s = std::any_cast<const std::string&>(a);
-    return mrb_str_new(mrb, s.data(), s.size());
-  }
-  if (a.type() == typeid(std::vector<std::any>)) {
-    const auto& v = std::any_cast<const std::vector<std::any>&>(a);
-    mrb_value ary = mrb_ary_new_capa(mrb, static_cast<mrb_int>(v.size()));
-    mrb_gc_protect(mrb, ary);
-    int arena_index = mrb_gc_arena_save(mrb);
-    for (const auto& item : v) {
-      mrb_ary_push(mrb, ary, any_to_mrb(mrb, item));
-      mrb_gc_arena_restore(mrb, arena_index);
-    }
-    return ary;
-  }
-  if (a.type() == typeid(std::map<MapKey, std::any>)) {
-    const auto& m = std::any_cast<const std::map<MapKey, std::any>&>(a);
-    mrb_value h = mrb_hash_new(mrb);
-    mrb_gc_protect(mrb, h);
-    int arena_index = mrb_gc_arena_save(mrb);
-    for (const auto& [k, v] : m) {
-      mrb_hash_set(mrb, h, map_key_to_mrb(mrb, k), any_to_mrb(mrb, v));
-      mrb_gc_arena_restore(mrb, arena_index);
-    }
-    return h;
-  }
-  mrb_raise(mrb, E_TYPE_ERROR, "any_to_mrb: unhandled std::any content");
-}
-
-static mrb_value
-any_roundtrip(mrb_state* mrb, mrb_value self)
-{
-  mrb_value val;
-  mrb_get_args(mrb, "o", &val);
-  std::any a = mrb_value_to_any(mrb, val);
-  return any_to_mrb(mrb, a);
-}
-
-// -------------------------------------------------------------
-// cpp_to_mrb_value<T> probes: fixed C++-side input in, mrb_value out,
-// left for test.rb to check.
-// -------------------------------------------------------------
-
-static mrb_value
-to_mrb_bool(mrb_state* mrb, mrb_value self)
-{
-  mrb_bool b;
-  mrb_get_args(mrb, "b", &b);
-  return cpp_to_mrb_value(mrb, static_cast<bool>(b));
-}
-
-static mrb_value
-to_mrb_int(mrb_state* mrb, mrb_value self)
-{
-  mrb_int i;
-  mrb_get_args(mrb, "i", &i);
-  return cpp_to_mrb_value(mrb, static_cast<int>(i));
-}
-
-static mrb_value
-to_mrb_double(mrb_state* mrb, mrb_value self)
-{
-  mrb_float f;
-  mrb_get_args(mrb, "f", &f);
-  return cpp_to_mrb_value(mrb, static_cast<double>(f));
-}
-
-static mrb_value
-to_mrb_std_string(mrb_state* mrb, mrb_value self)
-{
-  return cpp_to_mrb_value(mrb, std::string("foo"));
-}
-
-static mrb_value
-to_mrb_string_view(mrb_state* mrb, mrb_value self)
-{
-  return cpp_to_mrb_value(mrb, std::string_view("bar"));
-}
-
-static mrb_value
-to_mrb_cstr(mrb_state* mrb, mrb_value self)
-{
-  return cpp_to_mrb_value(mrb, "baz");
-}
-
-static mrb_value
-to_mrb_nullptr(mrb_state* mrb, mrb_value self)
-{
-  return cpp_to_mrb_value(mrb, nullptr);
-}
-
-// std::optional is a range in C++26, and a range becomes an Array. An
-// optional is its value or nil instead, as nil becomes an empty optional.
-static mrb_value
-to_mrb_optional_int(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_nil_p(v) ? std::optional<int>() : std::optional<int>(static_cast<int>(mrb_integer(v))));
-}
-
-static mrb_value
-to_mrb_optional_string(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_nil_p(v) ? std::optional<std::string>() : std::optional<std::string>("foo"));
-}
-
-static mrb_value
-to_mrb_map(mrb_state* mrb, mrb_value self)
-{
-  std::map<std::string, int> smap = {{"a", 1}, {"b", 2}};
-  return cpp_to_mrb_value(mrb, smap);
-}
-
-static mrb_value
-to_mrb_unordered_map(mrb_state* mrb, mrb_value self)
-{
-  std::unordered_map<std::string, bool> umap = {{"x", true}, {"y", false}};
-  return cpp_to_mrb_value(mrb, umap);
-}
-
-static mrb_value
-to_mrb_set(mrb_state* mrb, mrb_value self)
-{
-  std::set<int> sset = {10, 20};
-  return cpp_to_mrb_value(mrb, sset);
-}
-
-static mrb_value
-to_mrb_unordered_set(mrb_state* mrb, mrb_value self)
-{
-  std::unordered_set<std::string> uset = {"foo", "bar"};
-  return cpp_to_mrb_value(mrb, uset);
-}
-
-static mrb_value
-to_mrb_vector(mrb_state* mrb, mrb_value self)
-{
-  std::vector<int> v = {1, 2, 3};
-  return cpp_to_mrb_value(mrb, v);
-}
-
-static mrb_value
-to_mrb_array(mrb_state* mrb, mrb_value self)
-{
-  std::array<std::string, 2> arr = {"x", "y"};
-  return cpp_to_mrb_value(mrb, arr);
-}
-
-static mrb_value
-to_mrb_time(mrb_state* mrb, mrb_value self)
-{
-  return cpp_to_mrb_value(mrb, std::chrono::system_clock::now());
-}
+#include <mruby/num_helpers.hpp>
+#include <mruby/numeric.h>
 
 // ----------------------------------------------
 // Subclassing tests for MRB_CPP_DEFINE_TYPE
@@ -435,13 +233,20 @@ static void run_cpp_data_roundtrip_test(mrb_state* mrb) {
 }
 
 static mrb_value
+test_thing_sum(mrb_state* mrb, mrb_value self)
+{
+  mrb_value obj;
+  mrb_get_args(mrb, "o", &obj);
+  const TestThing* t = mrb_cpp_get<TestThing>(mrb, obj);
+  return mrb_int_value(mrb, t->x + t->y);
+}
+
+static mrb_value
 cpp_data_roundtrip_ok_q(mrb_state* mrb, mrb_value self)
 {
   run_cpp_data_roundtrip_test(mrb);
   return mrb_true_value();
 }
-
-
 
 // -------------------------------------------------------------
 // mrb_cpp_new and mrb_cpp_delete free each object exactly once.
@@ -498,141 +303,10 @@ multi_derived_value(mrb_state* mrb, mrb_value self)
   return mrb_int_value(mrb, mrb_cpp_get<PolyBase>(mrb, obj)->v);
 }
 
-// -------------------------------------------------------------
-// mrb_value_to<T> probes: a Ruby value in, the C++ value it makes,
-// sent back through cpp_to_mrb_value or built by hand where the
-// type has no form in that direction, so test.rb can compare it.
-// -------------------------------------------------------------
-
-static mrb_value
-from_mrb_int(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return mrb_int_value(mrb, mrb_value_to<mrb_int>(mrb, v));
-}
-
-static mrb_value
-from_mrb_float(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return mrb_float_value(mrb, mrb_value_to<double>(mrb, v));
-}
-
-static mrb_value
-from_mrb_bool(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return mrb_bool_value(mrb_value_to<bool>(mrb, v));
-}
-
-static mrb_value
-from_mrb_string(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_value_to<std::string>(mrb, v));
-}
-
-static mrb_value
-from_mrb_string_view(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  const std::string_view sv = mrb_value_to<std::string_view>(mrb, v);
-  return mrb_str_new(mrb, sv.data(), sv.size());
-}
-
-static mrb_value
-from_mrb_optional_int(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  const std::optional<mrb_int> o = mrb_value_to<std::optional<mrb_int>>(mrb, v);
-  return o ? mrb_int_value(mrb, *o) : mrb_nil_value();
-}
-
-static mrb_value
-from_mrb_pair(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  const auto p = mrb_value_to<std::pair<std::string, mrb_int>>(mrb, v);
-  mrb_value ary = mrb_ary_new_capa(mrb, 2);
-  mrb_ary_push(mrb, ary, cpp_to_mrb_value(mrb, p.first));
-  mrb_ary_push(mrb, ary, mrb_int_value(mrb, p.second));
-  return ary;
-}
-
-static mrb_value
-from_mrb_array3(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  const auto a = mrb_value_to<std::array<mrb_int, 3>>(mrb, v);
-  return mrb_int_value(mrb, a[0] * 100 + a[1] * 10 + a[2]);
-}
-
-static mrb_value
-from_mrb_vector_int(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_value_to<std::vector<mrb_int>>(mrb, v));
-}
-
-static mrb_value
-from_mrb_map(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_value_to<std::map<std::string, mrb_int>>(mrb, v));
-}
-
-static mrb_value
-from_mrb_set(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_value_to<std::set<mrb_int>>(mrb, v));
-}
-
-static mrb_value
-from_mrb_time(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  return cpp_to_mrb_value(mrb, mrb_value_to<std::chrono::system_clock::time_point>(mrb, v));
-}
-
-static mrb_value
-from_mrb_data(mrb_state* mrb, mrb_value self)
-{
-  mrb_value v;
-  mrb_get_args(mrb, "o", &v);
-  const TestThing t = mrb_value_to<TestThing>(mrb, v);
-  return mrb_int_value(mrb, t.x + t.y);
-}
-
 MRB_BEGIN_DECL
 void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
   struct RClass* m = mrb_define_module(mrb, "CExtHelpersVectors");
 
-  mrb_define_module_function(mrb, m, "from_mrb_int", from_mrb_int, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_float", from_mrb_float, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_bool", from_mrb_bool, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_string", from_mrb_string, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_string_view", from_mrb_string_view, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_optional_int", from_mrb_optional_int, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_pair", from_mrb_pair, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_array3", from_mrb_array3, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_vector_int", from_mrb_vector_int, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_map", from_mrb_map, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_set", from_mrb_set, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_time", from_mrb_time, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "from_mrb_data", from_mrb_data, MRB_ARGS_REQ(1));
   struct RClass* holder = mrb_define_class(mrb, "TestThingHolder", mrb->object_class);
   MRB_SET_INSTANCE_TT(holder, MRB_TT_DATA);
   mrb_define_method(mrb, holder, "initialize",
@@ -655,27 +329,9 @@ void mrb_mruby_c_ext_helpers_gem_test(mrb_state* mrb) {
       MRB_ARGS_NONE());
   mrb_define_module_function(mrb, m, "multi_derived_value", multi_derived_value, MRB_ARGS_REQ(1));
 
-  mrb_define_module_function(mrb, m, "any_roundtrip", any_roundtrip, MRB_ARGS_REQ(1));
-
-  mrb_define_module_function(mrb, m, "to_mrb_bool", to_mrb_bool, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "to_mrb_int", to_mrb_int, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "to_mrb_double", to_mrb_double, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "to_mrb_std_string", to_mrb_std_string, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_string_view", to_mrb_string_view, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_cstr", to_mrb_cstr, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_optional_int", to_mrb_optional_int, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "to_mrb_optional_string", to_mrb_optional_string, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, m, "to_mrb_nullptr", to_mrb_nullptr, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_map", to_mrb_map, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_unordered_map", to_mrb_unordered_map, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_set", to_mrb_set, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_unordered_set", to_mrb_unordered_set, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_vector", to_mrb_vector, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_array", to_mrb_array, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, m, "to_mrb_time", to_mrb_time, MRB_ARGS_NONE());
-
   mrb_define_module_function(mrb, m, "numeric_edges_ok?", numeric_edges_ok_q, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, m, "subclassing_ok?", subclassing_ok_q, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, m, "test_thing_sum", test_thing_sum, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, m, "cpp_data_roundtrip_ok?", cpp_data_roundtrip_ok_q, MRB_ARGS_NONE());
 }
 MRB_END_DECL
