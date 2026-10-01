@@ -16,6 +16,9 @@
 #include "branch_pred.h"
 #include <chrono>
 #include "num_helpers.hpp"
+#if __has_include(<mruby/chrono.hpp>)
+#include <mruby/chrono.hpp>
+#endif
 
 namespace mrbcpp::value_converter {
   template <typename T, typename = void>
@@ -103,10 +106,10 @@ namespace mrbcpp::value_converter {
         }
         return hash;
       } else if constexpr (is_set_like_v<T>) {
-        struct RClass* set_class = mrb_class_get_id(mrb, MRB_SYM(Set));
-        if (unlikely(!set_class)) {
-          mrb_raise(mrb, E_NAME_ERROR, "Set class not defined — is it included in your mruby build?");
+        if (unlikely(!mrb_class_defined_id(mrb, MRB_SYM(Set)))) {
+          mrb_raise(mrb, E_NAME_ERROR, "Set is not defined: the build needs mruby-set");
         }
+        struct RClass* set_class = mrb_class_get_id(mrb, MRB_SYM(Set));
 
         mrb_value ruby_set = mrb_obj_new(mrb, set_class, 0, nullptr);
         const int arena_index = mrb_gc_arena_save(mrb);
@@ -115,6 +118,10 @@ namespace mrbcpp::value_converter {
           mrb_gc_arena_restore(mrb, arena_index);
         }
         return ruby_set;
+#if __has_include(<mruby/chrono.hpp>)
+      } else if constexpr (mrb_chrono::detail::is_duration_v<T>) {
+        return mrb_chrono::from(mrb, val);
+#endif
       } else if constexpr (is_iterable_v<T>) {
         mrb_value ary = mrb_ary_new_capa(mrb, static_cast<mrb_int>(std::size(val)));
         const int arena_index = mrb_gc_arena_save(mrb);
@@ -134,10 +141,10 @@ namespace mrbcpp::value_converter {
         mrb_value sec = mrb_convert_number(mrb, time);
         mrb_value usec = mrb_convert_number(mrb, micros);
 
-        struct RClass* time_class = mrb_class_get_id(mrb, MRB_SYM(Time));
-        if (unlikely(!time_class)) {
-          mrb_raise(mrb, E_NAME_ERROR, "Time class not defined — is it included in your mruby build?");
+        if (unlikely(!mrb_class_defined_id(mrb, MRB_SYM(Time)))) {
+          mrb_raise(mrb, E_NAME_ERROR, "Time is not defined: the build needs mruby-time");
         }
+        struct RClass* time_class = mrb_class_get_id(mrb, MRB_SYM(Time));
 
         mrb_value time_at = mrb_funcall_id(mrb, mrb_obj_value(time_class), MRB_SYM(at), 2, sec, usec);
         mrb_gc_arena_restore(mrb, arena_index);
