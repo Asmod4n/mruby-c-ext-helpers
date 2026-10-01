@@ -10,12 +10,6 @@ assert("Big Endian Fixnum de-/encoding") do
   assert_equal(100, 100.to_bin_be.to_fix_be)
 end
 
-# Two values in an order-independent pair, without relying on
-# Array#sort's element order for the unordered container tests below.
-def unordered_pair?(ary, a, b)
-  ary.size == 2 && ((ary[0] == a && ary[1] == b) || (ary[0] == b && ary[1] == a))
-end
-
 # --- Pure C++/C-API checks with no Ruby-observable output beyond
 # "it ran to completion": numeric edge cases, the MRB_CPP_DEFINE_TYPE
 # subclassing contract, and the mrb_cpp_new/mrb_cpp_get round trip.
